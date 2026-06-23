@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<style>
+
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:black;
+}
+
+.slide{
+    position:absolute;
+    width:100%;
+    height:100%;
+    background-size:cover;
+    background-position:center center;
+    opacity:0;
+    transition:opacity 1s ease-in-out;
+}
+
+.visible{
+    opacity:1;
+}
+
+.zoom{
+    animation:kenburns 6s linear forwards;
+}
+
+@keyframes kenburns{
+
+    from{
+        transform:scale(1);
+    }
+
+    to{
+        transform:scale(1.15);
+    }
+
+}
+
+.logo{
+    position:absolute;
+    bottom:20px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:100;
+    width:300px;
+    opacity:.85;
+}
+
+</style>
+</head>
+<body>
+
+<div id="slide1" class="slide visible"></div>
+<div id="slide2" class="slide"></div>
+
+<img src="logo.png" class="logo">
+
+<script>
+
+let images=[];
+let current=0;
+let active=0;
+
+function loadImages(){
+
+fetch("https://api.github.com/repos/DesignServizi/sandiego/contents/images")
+
+.then(r=>r.json())
+
+.then(data=>{
+
+    images=[];
+
+    data.forEach(file=>{
+
+        if(file.download_url)
+            images.push(file.download_url);
+
+    });
+
+});
+
+}
+
+loadImages();
+
+setInterval(loadImages,60000);
+
+function nextSlide(){
+
+    if(images.length==0)
+        return;
+
+    let next=(active==0)?1:0;
+
+    let slide=document.getElementById("slide"+(next+1));
+
+    slide.classList.remove("zoom");
+
+    slide.style.backgroundImage=
+        "url('"+images[current]+"')";
+
+    void slide.offsetWidth;
+
+    slide.classList.add("zoom");
+
+    slide.classList.add("visible");
+
+    document.getElementById("slide"+(active+1))
+        .classList.remove("visible");
+
+    active=next;
+
+    current++;
+
+    if(current>=images.length)
+        current=0;
+
+}
+
+setTimeout(function(){
+
+    nextSlide();
+
+    setInterval(nextSlide,3000);
+
+},1000);
+
+</script>
+
+</body>
+</html>
