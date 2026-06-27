@@ -15,29 +15,15 @@ html,body{
     height:100%;
     overflow:hidden;
     font-family:Arial,Helvetica,sans-serif;
-    color:white;
 }
 
 body{
-    background:
-    linear-gradient(
-        rgba(0,0,0,.45),
-        rgba(0,0,0,.55)
-    ),
-    url('background.jpg');
-
-    background-size:cover;
-    background-position:center;
-    animation:kenburns 40s linear infinite alternate;
-}
-
-@keyframes kenburns{
-    from{
-        transform:scale(1);
-    }
-    to{
-        transform:scale(1.1);
-    }
+    background:linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #fffdf7 50%,
+        #f8fbff 100%
+    );
 }
 
 .overlay{
@@ -49,7 +35,7 @@ body{
     align-items:center;
     text-align:center;
     padding:20px;
-    backdrop-filter:blur(2px);
+    box-sizing:border-box;
 }
 
 .logo{
@@ -59,57 +45,102 @@ body{
 
 .title{
     font-size:clamp(32px,6vw,72px);
-    font-weight:bold;
-    text-shadow:0 0 20px rgba(0,0,0,.8);
+    font-weight:700;
+    color:#1b4f72;
+    letter-spacing:2px;
+    margin-bottom:10px;
 }
 
 .subtitle{
     font-size:clamp(18px,3vw,32px);
-    margin-top:15px;
-    opacity:.95;
+    color:#6d7a86;
+    line-height:1.5;
 }
 
 .date{
     margin-top:30px;
     font-size:clamp(22px,3vw,36px);
+    color:#c89b3c;
+    font-weight:bold;
 }
 
 .countdown{
-    margin-top:40px;
+    margin-top:50px;
     display:flex;
-    gap:20px;
+    gap:25px;
     flex-wrap:wrap;
     justify-content:center;
 }
 
 .box{
-    min-width:120px;
-    padding:20px;
-    background:rgba(255,255,255,.15);
-    border:1px solid rgba(255,255,255,.2);
-    border-radius:20px;
-    backdrop-filter:blur(10px);
+    min-width:130px;
+    padding:25px;
+    background:white;
+    border-radius:24px;
+    box-shadow:
+        0 8px 25px rgba(0,0,0,.08);
+    border:1px solid rgba(0,0,0,.04);
+    transition:.3s;
+}
+
+.box:hover{
+    transform:translateY(-5px);
+    box-shadow:
+        0 15px 40px rgba(0,0,0,.12);
 }
 
 .number{
-    font-size:48px;
-    font-weight:bold;
+    font-size:56px;
+    font-weight:700;
+    color:#1b4f72;
 }
 
 .label{
     margin-top:10px;
     font-size:18px;
+    color:#777;
+    text-transform:uppercase;
+    letter-spacing:1px;
 }
 
 .footer{
     position:absolute;
-    bottom:20px;
+    bottom:25px;
     width:100%;
     text-align:center;
     font-size:18px;
-    opacity:.85;
+    color:#999;
 }
 
+@media(max-width:768px){
+
+    .logo{
+        width:85vw;
+        margin-bottom:20px;
+    }
+
+    .countdown{
+        gap:15px;
+    }
+
+    .box{
+        min-width:100px;
+        padding:18px;
+    }
+
+    .number{
+        font-size:42px;
+    }
+
+    .label{
+        font-size:14px;
+    }
+
+    .footer{
+        font-size:14px;
+        padding:0 15px;
+    }
+}
 </style>
 </head>
 
