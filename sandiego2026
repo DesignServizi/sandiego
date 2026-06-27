@@ -1,0 +1,204 @@
+```html
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Eternal Happiness Convention 2026</title>
+
+<style>
+
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    font-family:Arial,Helvetica,sans-serif;
+    color:white;
+}
+
+body{
+    background:
+    linear-gradient(
+        rgba(0,0,0,.45),
+        rgba(0,0,0,.55)
+    ),
+    url('background.jpg');
+
+    background-size:cover;
+    background-position:center;
+    animation:kenburns 40s linear infinite alternate;
+}
+
+@keyframes kenburns{
+    from{
+        transform:scale(1);
+    }
+    to{
+        transform:scale(1.1);
+    }
+}
+
+.overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:20px;
+    backdrop-filter:blur(2px);
+}
+
+.logo{
+    width:min(500px,90vw);
+    margin-bottom:30px;
+}
+
+.title{
+    font-size:clamp(32px,6vw,72px);
+    font-weight:bold;
+    text-shadow:0 0 20px rgba(0,0,0,.8);
+}
+
+.subtitle{
+    font-size:clamp(18px,3vw,32px);
+    margin-top:15px;
+    opacity:.95;
+}
+
+.date{
+    margin-top:30px;
+    font-size:clamp(22px,3vw,36px);
+}
+
+.countdown{
+    margin-top:40px;
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+    justify-content:center;
+}
+
+.box{
+    min-width:120px;
+    padding:20px;
+    background:rgba(255,255,255,.15);
+    border:1px solid rgba(255,255,255,.2);
+    border-radius:20px;
+    backdrop-filter:blur(10px);
+}
+
+.number{
+    font-size:48px;
+    font-weight:bold;
+}
+
+.label{
+    margin-top:10px;
+    font-size:18px;
+}
+
+.footer{
+    position:absolute;
+    bottom:20px;
+    width:100%;
+    text-align:center;
+    font-size:18px;
+    opacity:.85;
+}
+
+</style>
+</head>
+
+<body>
+
+<audio autoplay loop>
+    <source src="sjjm_E_163.mp3" type="audio/mpeg">
+</audio>
+
+<div class="overlay">
+
+    <img src="logo.png" class="logo">
+
+    <div class="title">
+        Eternal Happiness Convention 2026
+    </div>
+
+    <div class="subtitle">
+        Amalfi Belvedere<br>
+        San Diego
+    </div>
+
+    <div class="date">
+        27 • 28 • 29 Novembre 2026
+    </div>
+
+    <div class="countdown">
+
+        <div class="box">
+            <div class="number" id="days">0</div>
+            <div class="label">Giorni</div>
+        </div>
+
+        <div class="box">
+            <div class="number" id="hours">0</div>
+            <div class="label">Ore</div>
+        </div>
+
+        <div class="box">
+            <div class="number" id="minutes">0</div>
+            <div class="label">Minuti</div>
+        </div>
+
+        <div class="box">
+            <div class="number" id="seconds">0</div>
+            <div class="label">Secondi</div>
+        </div>
+
+    </div>
+
+</div>
+
+<div class="footer">
+    Vi aspettiamo a San Diego ❤️
+</div>
+
+<script>
+
+const eventDate =
+new Date("2026-11-27T09:00:00").getTime();
+
+function updateCountdown(){
+
+    const now = new Date().getTime();
+    const distance = eventDate - now;
+
+    if(distance < 0){
+        document.querySelector(".countdown").innerHTML =
+        "<h1>La convention è iniziata!</h1>";
+        return;
+    }
+
+    const days = Math.floor(distance / (1000*60*60*24));
+    const hours = Math.floor((distance % (1000*60*60*24)) / (1000*60*60));
+    const minutes = Math.floor((distance % (1000*60*60)) / (1000*60));
+    const seconds = Math.floor((distance % (1000*60)) / 1000);
+
+    document.getElementById("days").innerHTML = days;
+    document.getElementById("hours").innerHTML = hours;
+    document.getElementById("minutes").innerHTML = minutes;
+    document.getElementById("seconds").innerHTML = seconds;
+}
+
+updateCountdown();
+
+setInterval(updateCountdown,1000);
+
+</script>
+
+</body>
+</html>
+```
