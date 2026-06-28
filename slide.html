@@ -2,21 +2,597 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Eternal Happiness Convention 2026</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slideshow 3D</title>
+<style>
+  /* ============================================================
+     CONFIG VISIVO
+     ============================================================ */
+  :root{
+    --bg:        #07070c;
+    --bg-glow:   #14111f;
+    --stage:     #0d0d16;
+    --ink:       #f4f1ea;
+    --muted:     #8a8597;
+    --accent:    #e8b04b;   /* ambra calda */
+    --accent-2:  #6f7cff;   /* contrappunto freddo */
+    --line:      rgba(255,255,255,.10);
+    --slide-ms:  5000;       /* durata di ogni slide in ms (riferimento; il valore reale è in JS) */
+    --fade-ms:   1100ms;     /* durata transizione 3D */
+  }
 
-<link rel="stylesheet" href="style.css">
+  *{box-sizing:border-box;margin:0;padding:0}
+
+  html,body{height:100%}
+
+  body{
+    background:
+      radial-gradient(120% 90% at 50% -10%, var(--bg-glow) 0%, var(--bg) 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Inter","Helvetica Neue",Arial,sans-serif;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+  }
+
+  /* ---- intestazione minimale ---- */
+  header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:22px 30px 0;
+    gap:20px;
+    z-index:5;
+  }
+  .title{
+    font-size:13px;
+    letter-spacing:.42em;
+    text-transform:uppercase;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .counter{
+    font-variant-numeric:tabular-nums;
+    font-size:13px;
+    letter-spacing:.2em;
+    color:var(--muted);
+  }
+  .counter b{color:var(--ink);font-weight:600}
+
+  /* ============================================================
+     PALCOSCENICO 3D
+     ============================================================ */
+  .stage{
+    flex:1;
+    position:relative;
+    perspective:1600px;       /* la profondità prospettica */
+    perspective-origin:50% 45%;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  .deck{
+    position:absolute;
+    inset:0;
+    transform-style:preserve-3d;
+  }
+
+  /* ogni slide è un piano nello spazio 3D */
+  .slide{
+    position:absolute;
+    inset:clamp(28px, 6vh, 90px) clamp(28px, 6vw, 130px);
+    transform-style:preserve-3d;
+    opacity:0;
+    pointer-events:none;
+    will-change:transform, opacity;
+    backface-visibility:hidden;
+  }
+
+  .slide .frame{
+    position:absolute;
+    inset:0;
+    border-radius:6px;
+    overflow:hidden;
+    box-shadow:
+      0 40px 120px rgba(0,0,0,.6),
+      0 0 0 1px var(--line);
+    background:var(--stage);
+  }
+
+  .slide img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    transform:scale(1.04);
+  }
+
+  /* leggero overlay che dà profondità cinematografica */
+  .slide .frame::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,.35) 100%);
+    pointer-events:none;
+  }
+
+  /* didascalia opzionale */
+  .slide .cap{
+    position:absolute;
+    left:0;bottom:0;
+    padding:18px 22px;
+    font-size:14px;
+    letter-spacing:.04em;
+    color:var(--ink);
+    text-shadow:0 2px 12px rgba(0,0,0,.7);
+    opacity:0;
+    transform:translateY(12px);
+    transition:opacity .6s ease .35s, transform .6s ease .35s;
+    z-index:2;
+  }
+
+  /* ---- stato ATTIVO ---- */
+  .slide.active{
+    opacity:1;
+    z-index:3;
+    animation:kenburns var(--kb,7s) ease-out forwards;
+  }
+  .slide.active .cap{opacity:1;transform:none}
+
+  /* Ken Burns: movimento lento mentre la slide è visibile */
+  @keyframes kenburns{
+    from{transform:scale(1) translate3d(0,0,0)}
+    to  {transform:scale(1.07) translate3d(var(--kx,-1.5%),var(--ky,-1.5%),0)}
+  }
+  .slide.active img{
+    animation:imgdrift var(--kb,7s) ease-out forwards;
+  }
+  @keyframes imgdrift{
+    from{transform:scale(1.04)}
+    to  {transform:scale(1.12)}
+  }
+
+  /* ============================================================
+     EFFETTI 3D DI TRANSIZIONE  (si alternano slide dopo slide)
+     ogni effetto ha uno stato "enter" (ingresso) e "leave" (uscita)
+     ============================================================ */
+
+  /* --- 1. CUBO orizzontale --- */
+  .fx-cube.enter{animation:cubeIn var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  .fx-cube.leave{animation:cubeOut var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  @keyframes cubeIn{
+    from{opacity:0;transform:translateX(60%) rotateY(-75deg) scale(.85)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes cubeOut{
+    from{opacity:1;transform:none}
+    to  {opacity:0;transform:translateX(-60%) rotateY(75deg) scale(.85)}
+  }
+
+  /* --- 2. FLIP verticale (carta che gira) --- */
+  .fx-flip.enter{animation:flipIn var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  .fx-flip.leave{animation:flipOut var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  @keyframes flipIn{
+    from{opacity:0;transform:rotateX(85deg) translateY(40%)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes flipOut{
+    from{opacity:1;transform:none}
+    to  {opacity:0;transform:rotateX(-85deg) translateY(-40%)}
+  }
+
+  /* --- 3. ZOOM prospettico (entra dal profondo) --- */
+  .fx-zoom.enter{animation:zoomIn var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  .fx-zoom.leave{animation:zoomOut var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  @keyframes zoomIn{
+    from{opacity:0;transform:translateZ(-900px) rotateY(18deg)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes zoomOut{
+    from{opacity:1;transform:none}
+    to  {opacity:0;transform:translateZ(700px) rotateY(-12deg)}
+  }
+
+  /* --- 4. CUBO verticale --- */
+  .fx-tilt.enter{animation:tiltIn var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  .fx-tilt.leave{animation:tiltOut var(--fade-ms) cubic-bezier(.7,0,.2,1) forwards}
+  @keyframes tiltIn{
+    from{opacity:0;transform:translateY(55%) rotateX(70deg) scale(.85)}
+    to  {opacity:1;transform:none}
+  }
+  @keyframes tiltOut{
+    from{opacity:1;transform:none}
+    to  {opacity:0;transform:translateY(-55%) rotateX(-70deg) scale(.85)}
+  }
+
+  /* riflesso a pavimento per dare "stanza" 3D */
+  .floor{
+    position:absolute;
+    left:0;right:0;bottom:-2px;height:32%;
+    background:linear-gradient(180deg, rgba(110,124,255,.05), transparent 70%);
+    pointer-events:none;
+  }
+
+  /* ============================================================
+     BARRA DI PROGRESSO + CONTROLLI
+     ============================================================ */
+  .progress{
+    position:absolute;
+    left:0;right:0;bottom:0;
+    height:3px;
+    background:var(--line);
+    z-index:6;
+  }
+  .progress .bar{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg, var(--accent), var(--accent-2));
+    box-shadow:0 0 14px rgba(232,176,75,.5);
+  }
+
+  footer{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    padding:18px 0 24px;
+    z-index:6;
+  }
+  .btn{
+    appearance:none;
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.03);
+    color:var(--ink);
+    width:46px;height:46px;
+    border-radius:50%;
+    cursor:pointer;
+    display:grid;place-items:center;
+    transition:border-color .25s, background .25s, transform .12s;
+  }
+  .btn:hover{border-color:var(--accent);background:rgba(232,176,75,.08)}
+  .btn:active{transform:scale(.92)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .btn svg{width:18px;height:18px;fill:var(--ink)}
+  .btn.play{width:54px;height:54px}
+  .btn.play svg{width:20px;height:20px}
+
+  /* indicatori (pallini) */
+  .dots{
+    display:flex;gap:9px;align-items:center;
+    margin:0 6px;
+  }
+  .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--line);
+    cursor:pointer;
+    transition:transform .25s, background .25s;
+  }
+  .dot.on{background:var(--accent);transform:scale(1.5)}
+
+  /* messaggio se le immagini mancano */
+  .hint{
+    position:absolute;inset:0;
+    display:none;
+    place-items:center;
+    text-align:center;
+    padding:40px;
+    color:var(--muted);
+    z-index:4;
+  }
+  .hint.show{display:grid}
+  .hint code{
+    color:var(--accent);
+    background:rgba(232,176,75,.08);
+    padding:2px 7px;border-radius:4px;
+    font-size:.95em;
+  }
+  .hint h2{color:var(--ink);font-weight:600;margin-bottom:12px;letter-spacing:.02em}
+  .hint p{max-width:520px;line-height:1.7;font-size:15px}
+
+  /* accessibilità: rispetta chi disattiva le animazioni */
+  @media (prefers-reduced-motion: reduce){
+    .slide.active,.slide.active img,
+    .fx-cube.enter,.fx-cube.leave,
+    .fx-flip.enter,.fx-flip.leave,
+    .fx-zoom.enter,.fx-zoom.leave,
+    .fx-tilt.enter,.fx-tilt.leave{
+      animation-duration:.4s !important;
+    }
+  }
+
+  @media (max-width:640px){
+    header{padding:16px 18px 0}
+    .title{letter-spacing:.3em;font-size:11px}
+    .slide{inset:20px}
+  }
+</style>
 </head>
 <body>
 
-<div id="bg1" class="slide visible"></div>
-<div id="bg2" class="slide"></div>
+  <header>
+    <div class="title">Galleria&nbsp;·&nbsp;3D</div>
+    <div class="counter"><b id="cur">1</b> / <span id="tot">0</span></div>
+  </header>
 
-<div id="logoContainer">
-    <img src="logo.png">
-</div>
+  <main class="stage" id="stage" aria-label="Slideshow">
+    <div class="deck" id="deck"></div>
+    <div class="floor"></div>
 
-<script src="slideshow.js"></script>
+    <!-- messaggio di aiuto quando non ci sono immagini valide -->
+    <div class="hint" id="hint">
+      <div>
+        <h2>Nessuna immagine trovata</h2>
+        <p>La cartella <code>/images</code> del repository indicato non contiene immagini valide.
+        Modifica i valori <code>owner</code> / <code>repo</code> / <code>path</code> all'inizio dello script.</p>
+      </div>
+    </div>
+  </main>
 
+  <div class="progress"><div class="bar" id="bar"></div></div>
+
+  <footer>
+    <button class="btn" id="prev" aria-label="Precedente">
+      <svg viewBox="0 0 24 24"><path d="M15.5 4 8 12l7.5 8 1.5-1.4L10.8 12l6.2-6.6z"/></svg>
+    </button>
+    <button class="btn play" id="play" aria-label="Pausa / Play">
+      <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>
+    </button>
+    <div class="dots" id="dots"></div>
+    <button class="btn" id="next" aria-label="Successivo">
+      <svg viewBox="0 0 24 24"><path d="M8.5 4 16 12l-7.5 8L7 18.6 13.2 12 7 5.4z"/></svg>
+    </button>
+  </footer>
+
+<script>
+/* ============================================================
+   1) SORGENTE DELLE IMMAGINI
+   ------------------------------------------------------------
+   Le immagini vengono caricate AUTOMATICAMENTE dalla cartella
+   /images di un repository GitHub, tramite l'API "contents".
+   Modifica owner / repo / path per puntare al tuo repo.
+   ============================================================ */
+const GH = {
+  owner: "DesignServizi",
+  repo:  "sandiego",
+  path:  "images",
+  ref:   ""           // opzionale: branch o tag (es. "main"); vuoto = default
+};
+
+/* estensioni considerate immagini */
+const IMG_RE = /\.(jpe?g|png|gif|webp|avif|bmp|svg)$/i;
+
+/* elenco manuale usato SOLO come fallback se la fetch fallisce
+   (es. rate-limit GitHub o assenza di rete). Lascia vuoto se non serve. */
+const FALLBACK = [
+  // { src: "images/esempio.jpg", caption: "" },
+];
+
+/* recupera la lista dei file immagine dal repo GitHub */
+async function loadImages(){
+  const ref = GH.ref ? `?ref=${encodeURIComponent(GH.ref)}` : "";
+  const url = `https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}${ref}`;
+  const res = await fetch(url, { headers: { "Accept": "application/vnd.github+json" } });
+  if(!res.ok){
+    let msg = `GitHub API ${res.status}`;
+    if(res.status === 403) msg += " — rate limit superato (max 60 richieste/ora per IP). Riprova più tardi.";
+    if(res.status === 404) msg += " — repository o cartella non trovati.";
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return data
+    .filter(f => f.type === "file" && f.download_url && IMG_RE.test(f.name))
+    .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}))
+    .map(f => ({ src: f.download_url, caption: "" }));
+}
+
+/* ============================================================
+   2) IMPOSTAZIONI
+   ============================================================ */
+const SLIDE_MS = 5000;                          // 5 secondi per slide
+const EFFECTS  = ["fx-cube","fx-zoom","fx-flip","fx-tilt"]; // si alternano
+
+/* ============================================================
+   3) MOTORE SLIDESHOW
+   ============================================================ */
+const deck   = document.getElementById("deck");
+const dotsEl = document.getElementById("dots");
+const barEl  = document.getElementById("bar");
+const curEl  = document.getElementById("cur");
+const totEl  = document.getElementById("tot");
+const hint   = document.getElementById("hint");
+const playBtn= document.getElementById("play");
+const playIc = document.getElementById("playIcon");
+
+let slides = [];
+let index = 0;
+let playing = true;
+let timer = null;
+let progressStart = 0;
+let rafId = null;
+
+const ICON_PAUSE = '<path d="M8 5h3v14H8zM13 5h3v14h-3z"/>';
+const ICON_PLAY  = '<path d="M8 5v14l11-7z"/>';
+
+/* costruisce gli elementi slide partendo da una lista {src,caption} */
+function buildSlides(list){
+  totEl.textContent = list.length;
+  if(list.length === 0){ ready(0); return; }
+
+  let pending = list.length, built = 0;
+
+  list.forEach((item, i)=>{
+    const probe = new Image();
+    probe.onload = ()=> finish(true);
+    probe.onerror= ()=> finish(false);
+    probe.src = item.src;
+
+    function finish(ok){
+      if(ok){
+        const el = document.createElement("div");
+        el.className = "slide";
+        el.dataset.order = i;
+        el.innerHTML =
+          `<div class="frame">
+             <img src="${item.src}" alt="${item.caption||('Immagine '+(i+1))}">
+             ${item.caption ? `<div class="cap">${item.caption}</div>` : ``}
+           </div>`;
+        el.style.setProperty("--kx", (i%2? -1.8 : 1.8)+"%");
+        el.style.setProperty("--ky", (i%3? -1.5 : 1.2)+"%");
+        el.style.setProperty("--kb", (SLIDE_MS/1000 + 2)+"s");
+        deck.appendChild(el);
+        built++;
+      }
+      if(--pending === 0) ready(built);
+    }
+  });
+}
+
+/* avvio: carica da GitHub, con fallback all'elenco manuale */
+async function init(){
+  try{
+    const list = await loadImages();
+    if(list.length === 0) throw new Error("La cartella non contiene immagini.");
+    buildSlides(list);
+  }catch(err){
+    console.warn("Caricamento da GitHub fallito:", err.message);
+    if(FALLBACK.length){
+      buildSlides(FALLBACK);
+    }else{
+      showError(err.message);
+    }
+  }
+}
+
+function showError(message){
+  hint.querySelector("h2").textContent = "Impossibile caricare le immagini";
+  hint.querySelector("p").innerHTML =
+    `${message}<br><br>Controlla i valori <code>owner</code> / <code>repo</code> / <code>path</code>
+     all'inizio dello script, oppure imposta un elenco <code>FALLBACK</code>.`;
+  hint.classList.add("show");
+  totEl.textContent = "0";
+  playBtn.style.display = "none";
+}
+
+function ready(count){
+  slides = [...deck.querySelectorAll(".slide")];
+  if(slides.length === 0){
+    hint.classList.add("show");
+    totEl.textContent = "0";
+    playBtn.style.display = "none";
+    return;
+  }
+  // riordina secondo l'indice originale (gli onload arrivano fuori ordine)
+  slides.sort((a,b)=> a.dataset.order - b.dataset.order);
+  slides.forEach(s=>deck.appendChild(s));
+  totEl.textContent = slides.length;
+  buildDots();
+  show(0, null);
+  start();
+}
+
+function buildDots(){
+  dotsEl.innerHTML = "";
+  slides.forEach((_,i)=>{
+    const d = document.createElement("span");
+    d.className = "dot" + (i===0?" on":"");
+    d.addEventListener("click", ()=> goto(i));
+    dotsEl.appendChild(d);
+  });
+}
+
+/* mostra la slide i, applicando un effetto 3D di transizione */
+function show(i, prevI){
+  const fx = EFFECTS[i % EFFECTS.length];
+  const next = slides[i];
+
+  // pulizia classi
+  slides.forEach(s=>{
+    s.classList.remove("active","enter","leave",...EFFECTS);
+  });
+
+  // slide uscente
+  if(prevI !== null && slides[prevI]){
+    const prev = slides[prevI];
+    prev.classList.add(fx,"leave");
+    prev.style.zIndex = 2;
+  }
+
+  // slide entrante
+  next.classList.add(fx,"enter");
+  next.style.zIndex = 3;
+
+  // a transizione finita diventa "active" (parte il Ken Burns)
+  next.addEventListener("animationend", function once(){
+    next.classList.remove("enter",...EFFECTS);
+    next.classList.add("active");
+    next.removeEventListener("animationend", once);
+  });
+
+  // aggiorna UI
+  curEl.textContent = i+1;
+  [...dotsEl.children].forEach((d,k)=> d.classList.toggle("on", k===i));
+}
+
+function goto(i){
+  if(i === index) return;
+  const prev = index;
+  index = (i + slides.length) % slides.length;
+  show(index, prev);
+  restartTimer();
+}
+function nextSlide(){ goto(index+1); }
+function prevSlide(){ goto(index-1); }
+
+/* ---- timing + barra di progresso ---- */
+function start(){
+  playing = true;
+  playIc.innerHTML = ICON_PAUSE;
+  restartTimer();
+}
+function stop(){
+  playing = false;
+  playIc.innerHTML = ICON_PLAY;
+  clearTimeout(timer);
+  cancelAnimationFrame(rafId);
+}
+function togglePlay(){ playing ? stop() : start(); }
+
+function restartTimer(){
+  clearTimeout(timer);
+  cancelAnimationFrame(rafId);
+  if(!playing) return;
+  progressStart = performance.now();
+  timer = setTimeout(nextSlide, SLIDE_MS);
+  tickBar();
+}
+function tickBar(){
+  const elapsed = performance.now() - progressStart;
+  const pct = Math.min(100, (elapsed / SLIDE_MS) * 100);
+  barEl.style.width = pct + "%";
+  if(pct < 100 && playing) rafId = requestAnimationFrame(tickBar);
+}
+
+/* ---- controlli ---- */
+document.getElementById("next").addEventListener("click", nextSlide);
+document.getElementById("prev").addEventListener("click", prevSlide);
+playBtn.addEventListener("click", togglePlay);
+
+document.addEventListener("keydown", e=>{
+  if(e.key === "ArrowRight") nextSlide();
+  else if(e.key === "ArrowLeft") prevSlide();
+  else if(e.key === " "){ e.preventDefault(); togglePlay(); }
+});
+
+// pausa quando la scheda non è visibile (risparmio risorse)
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden) stop();
+});
+
+init();
+</script>
 </body>
 </html>
