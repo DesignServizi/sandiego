@@ -32,20 +32,28 @@
     color:var(--ink);
     font-family:"Inter","Helvetica Neue",Arial,sans-serif;
     overflow:hidden;
-    display:flex;
-    flex-direction:column;
     height:100vh;
+    position:relative;
   }
+  /* nasconde il cursore quando l'interfaccia è nascosta (vera modalità a tutto schermo) */
+  body:not(.ui-visible){cursor:none}
 
-  /* ---- intestazione minimale ---- */
+  /* ---- intestazione minimale (overlay che si auto-nasconde) ---- */
   header{
+    position:absolute;
+    top:0;left:0;right:0;
     display:flex;
     align-items:baseline;
     justify-content:space-between;
-    padding:22px 30px 0;
+    padding:22px 30px;
     gap:20px;
-    z-index:5;
+    z-index:7;
+    background:linear-gradient(180deg, rgba(0,0,0,.45), transparent);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .35s ease;
   }
+  body.ui-visible header{opacity:1}
   .title{
     font-size:13px;
     letter-spacing:.42em;
@@ -65,10 +73,10 @@
      PALCOSCENICO 3D
      ============================================================ */
   .stage{
-    flex:1;
-    position:relative;
+    position:absolute;
+    inset:0;
     perspective:1600px;       /* la profondità prospettica */
-    perspective-origin:50% 45%;
+    perspective-origin:50% 50%;
     overflow:hidden;
     display:flex;
     align-items:center;
@@ -81,10 +89,10 @@
     transform-style:preserve-3d;
   }
 
-  /* ogni slide è un piano nello spazio 3D */
+  /* ogni slide è un piano nello spazio 3D, a tutto schermo */
   .slide{
     position:absolute;
-    inset:clamp(28px, 6vh, 90px) clamp(28px, 6vw, 130px);
+    inset:0;
     transform-style:preserve-3d;
     opacity:0;
     pointer-events:none;
@@ -95,29 +103,15 @@
   .slide .frame{
     position:absolute;
     inset:0;
-    border-radius:6px;
     overflow:hidden;
-    box-shadow:
-      0 40px 120px rgba(0,0,0,.6),
-      0 0 0 1px var(--line);
-    background:var(--stage);
+    background:transparent;
   }
 
   .slide img{
     width:100%;
     height:100%;
-    object-fit:cover;
+    object-fit:contain;   /* mostra l'intera immagine, senza tagliare nulla */
     display:block;
-    transform:scale(1.04);
-  }
-
-  /* leggero overlay che dà profondità cinematografica */
-  .slide .frame::after{
-    content:"";
-    position:absolute;
-    inset:0;
-    background:linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(0,0,0,.35) 100%);
-    pointer-events:none;
   }
 
   /* didascalia opzionale */
@@ -135,26 +129,15 @@
     z-index:2;
   }
 
-  /* ---- stato ATTIVO ---- */
+  /* ---- stato ATTIVO ----
+     Nessuno zoom: lo zoom progressivo "taglierebbe" i bordi.
+     L'immagine resta intera per tutta la durata della slide. */
   .slide.active{
     opacity:1;
     z-index:3;
-    animation:kenburns var(--kb,7s) ease-out forwards;
+    transform:none;
   }
   .slide.active .cap{opacity:1;transform:none}
-
-  /* Ken Burns: movimento lento mentre la slide è visibile */
-  @keyframes kenburns{
-    from{transform:scale(1) translate3d(0,0,0)}
-    to  {transform:scale(1.07) translate3d(var(--kx,-1.5%),var(--ky,-1.5%),0)}
-  }
-  .slide.active img{
-    animation:imgdrift var(--kb,7s) ease-out forwards;
-  }
-  @keyframes imgdrift{
-    from{transform:scale(1.04)}
-    to  {transform:scale(1.12)}
-  }
 
   /* ============================================================
      EFFETTI 3D DI TRANSIZIONE  (si alternano slide dopo slide)
@@ -218,15 +201,18 @@
   }
 
   /* ============================================================
-     BARRA DI PROGRESSO + CONTROLLI
+     BARRA DI PROGRESSO + CONTROLLI (overlay che si auto-nascondono)
      ============================================================ */
   .progress{
     position:absolute;
-    left:0;right:0;bottom:0;
+    left:0;right:0;bottom:84px;
     height:3px;
     background:var(--line);
-    z-index:6;
+    z-index:7;
+    opacity:0;
+    transition:opacity .35s ease;
   }
+  body.ui-visible .progress{opacity:1}
   .progress .bar{
     height:100%;
     width:0%;
@@ -235,13 +221,20 @@
   }
 
   footer{
+    position:absolute;
+    left:0;right:0;bottom:0;
     display:flex;
     align-items:center;
     justify-content:center;
     gap:14px;
     padding:18px 0 24px;
-    z-index:6;
+    z-index:7;
+    background:linear-gradient(0deg, rgba(0,0,0,.5), transparent);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .35s ease;
   }
+  body.ui-visible footer{opacity:1;pointer-events:auto}
   .btn{
     appearance:none;
     border:1px solid var(--line);
@@ -585,7 +578,32 @@ document.addEventListener("keydown", e=>{
   if(e.key === "ArrowRight") nextSlide();
   else if(e.key === "ArrowLeft") prevSlide();
   else if(e.key === " "){ e.preventDefault(); togglePlay(); }
+  revealUI();
 });
+
+/* ---- interfaccia che compare solo al movimento del mouse / tocco ---- */
+const UI_HIDE_MS = 2500;        // dopo quanto l'interfaccia si nasconde
+let uiTimer = null;
+let overControls = false;       // true mentre il puntatore è sopra i comandi
+
+function revealUI(){
+  document.body.classList.add("ui-visible");
+  clearTimeout(uiTimer);
+  if(!overControls){
+    uiTimer = setTimeout(()=> document.body.classList.remove("ui-visible"), UI_HIDE_MS);
+  }
+}
+
+// movimento del mouse o tocco → mostra l'interfaccia
+window.addEventListener("mousemove", revealUI);
+window.addEventListener("touchstart", revealUI, {passive:true});
+
+// mentre si è sopra i comandi, resta sempre visibile
+[document.querySelector("footer"), document.querySelector("header")].forEach(el=>{
+  el.addEventListener("mouseenter", ()=>{ overControls = true; clearTimeout(uiTimer); document.body.classList.add("ui-visible"); });
+  el.addEventListener("mouseleave", ()=>{ overControls = false; revealUI(); });
+});
+
 
 // pausa quando la scheda non è visibile (risparmio risorse)
 document.addEventListener("visibilitychange", ()=>{
