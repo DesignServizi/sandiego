@@ -519,6 +519,18 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
         </label>
 
         <div class="field">
+          <span>Musica dello slideshow</span>
+          <div id="musicNow" class="lead" style="margin:0 0 8px">Nessuna musica</div>
+          <audio id="musicPrev" controls preload="none" class="hidden" style="width:100%;margin-bottom:8px"></audio>
+          <div class="btnRow">
+            <button class="btn btn-outline" id="musicPick" type="button">🎵 Scegli musica</button>
+            <button class="btn btn-outline" id="musicDel" type="button" disabled>Togli</button>
+          </div>
+          <input type="file" id="musicInput" accept="audio/*,.mp3,.m4a,.aac,.ogg,.wav" hidden>
+          <div class="msg" id="musicMsg"></div>
+        </div>
+
+        <div class="field">
           <span>All'apertura dell'app</span>
           <div class="seg" role="radiogroup">
             <label><input type="radio" name="setOpen" value="camera"> 📷 Scatta</label>
@@ -639,6 +651,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       $('setRec').checked  = !!j.settings.rec;
       showWho(j.settings.name);
       $('setConsent').checked = !!j.settings.consent;
+      showMusic(j.settings);
 
       const open = ['camera', 'gallery'].includes(j.settings.open) ? j.settings.open : 'choice';
       document.querySelector('input[name="setOpen"][value="' + open + '"]').checked = true;
@@ -795,6 +808,62 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   }
 
   $('setSave').addEventListener('click', saveSettings);
+
+  // musica: si carica appena scelta, non serve "Salva". Suona a ripetizione
+  // nello slideshow e a fine proiezione sfuma
+  function showMusic(st){
+    const has = !!(st && st.music);
+    $('musicNow').textContent = has ? '🎵 ' + (st.musicTitle || st.music) : 'Nessuna musica';
+    $('musicDel').disabled = !has;
+    const prev = $('musicPrev');
+    prev.classList.toggle('hidden', !has);
+    if(has) prev.src = API + 'music/' + encodeURIComponent(st.music);
+    else prev.removeAttribute('src');
+  }
+
+  async function musicCall(fd, busyText){
+    const out = $('musicMsg');
+    out.className = 'msg';
+    out.textContent = busyText;
+    $('musicPick').disabled = true;
+    $('musicDel').disabled = true;
+
+    try{
+      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+      const j = await r.json();
+      if(!j.success) throw new Error(j.error || 'errore');
+      showMusic(j.settings);
+      out.className = 'msg ok';
+      out.textContent = 'Fatto ✓';
+    }catch(e){
+      out.className = 'msg bad';
+      out.textContent = 'Non riuscito: ' + e.message;
+      loadSettings();
+    }
+
+    $('musicPick').disabled = false;
+  }
+
+  $('musicPick').addEventListener('click', () => $('musicInput').click());
+
+  $('musicInput').addEventListener('change', e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if(!f) return;
+
+    const fd = new FormData();
+    fd.append('a', 'music');
+    fd.append('u', code);
+    fd.append('music', f);
+    musicCall(fd, 'Carico la musica…');
+  });
+
+  $('musicDel').addEventListener('click', () => {
+    const fd = new FormData();
+    fd.append('a', 'music_del');
+    fd.append('u', code);
+    musicCall(fd, 'Tolgo la musica…');
+  });
 
   // ------------------------------------------------------------ avvio
 

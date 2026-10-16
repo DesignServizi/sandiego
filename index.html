@@ -609,6 +609,11 @@
   const MUSIC_FADE_MS = 2000;
   const MUSIC_VOLUME = 0.7;
 
+  // musica scelta dal delegato in app.html (Opzioni): suona a ripetizione per
+  // tutta la proiezione e a fine giro sfuma. Il nome arriva con le impostazioni
+  let delegateTrack = null;
+  const END_FADE_MS = 4000;
+
   const overlay    = document.getElementById('overlay');
   const statusText = document.getElementById('statusText');
   const startBtn   = document.getElementById('startBtn');
@@ -1613,7 +1618,7 @@
       if(musicTrack === null) return;
 
       const playing = players[musicCurrent];
-      fadeAudio(playing, 0, MUSIC_FADE_MS, () => playing.pause());
+      fadeAudio(playing, 0, track === MUSIC_STOP && musicTrack === delegateTrack ? END_FADE_MS : MUSIC_FADE_MS, () => playing.pause());
       musicTrack = null;
       return;
     }
@@ -1634,13 +1639,25 @@
     incoming.currentTime = 0;
 
     // niente loop: quando la traccia finisce resta il silenzio, fino alla
-    // prossima diapositiva che ne apre un'altra
-    incoming.loop = false;
+    // prossima diapositiva che ne apre un'altra. La musica del delegato
+    // invece ricomincia da capo
+    incoming.loop = (track === delegateTrack);
 
     const started = incoming.play();
 
     if(started && started.catch){
-      started.catch(() => showNotice('Non riesco a far partire la musica: ' + track));
+      started.catch(() => {
+        // con l'avvio automatico manca il tocco che il browser vuole per
+        // l'audio: la musica parte al primo tocco sullo schermo
+        if(track === delegateTrack){
+          const go = () => { if(musicTrack === track) incoming.play().catch(() => {}); };
+          document.addEventListener('pointerdown', go, { once:true });
+          document.addEventListener('keydown', go, { once:true });
+          showNotice('🔊 Tocca lo schermo per la musica');
+        }else{
+          showNotice('Non riesco a far partire la musica: ' + track);
+        }
+      });
     }
 
     fadeAudio(incoming, MUSIC_VOLUME, MUSIC_FADE_MS);
@@ -2413,6 +2430,8 @@
     watchPlayers();
     unlockPlayers();
 
+    if(delegateTrack) applyMusic(delegateTrack);
+
     overlay.classList.add('hidden');
 
     // il registratore parte con la schermata iniziale gia' sparita, cosi'
@@ -2449,6 +2468,8 @@
     if(st.message){ msgEl.textContent = st.message; msgEl.classList.remove('hidden'); }
 
     if(st.rec) recBtn.classList.remove('hidden');
+
+    if(st.music) delegateTrack = st.music;
 
     if(st.autostart){
       recWanted = false;
