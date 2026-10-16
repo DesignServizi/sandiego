@@ -690,7 +690,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     stopCam();
 
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      return;   // browser vecchio: resta la scheda Carica con il pulsante Scatta
+      return false;   // browser vecchio: si ripiega sul selettore del telefono
     }
 
     try{
@@ -701,13 +701,14 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     }catch(e){
       // permesso negato o fotocamera occupata: si resta su Carica
       $('upMsg').className = 'msg bad';
-      $('upMsg').textContent = 'Fotocamera non disponibile: usa il pulsante «Scatta».';
-      return;
+      $('upMsg').textContent = 'Fotocamera non disponibile: consenti l’accesso alla fotocamera nelle impostazioni del browser.';
+      return false;
     }
 
     $('camVideo').srcObject = camStream;
     $('cam').classList.remove('hidden');
     camShots = 0;
+    return true;
   }
 
   function closeCam(){
@@ -875,7 +876,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   let queue = [];   // { file, url, state: 'wait'|'busy'|'done'|'err', el }
   let sending = false;
 
-  $('camBtn').addEventListener('click', () => $('camInput').click());
+  // una sola fotocamera: quella dentro la pagina (la stessa dell'apertura
+  // automatica). Il selettore del telefono resta solo come ripiego
+  $('camBtn').addEventListener('click', async () => {
+    if(!(await openCam())) $('camInput').click();
+  });
   $('galBtn').addEventListener('click', () => $('galInput').click());
 
   ['camInput', 'galInput'].forEach(id => {
