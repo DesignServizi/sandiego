@@ -174,7 +174,7 @@ h2{
 /* ---------- carica ---------- */
 .queue{
   display:grid;
-  grid-template-columns:repeat(3, 1fr);
+  grid-template-columns:repeat(4, 1fr);
   gap:8px;
   margin:16px 0;
 }
@@ -256,6 +256,28 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
 }
 .seg label:has(input:checked){ border-color:var(--navy); background:var(--cream); }
 .seg input{ accent-color:var(--navy); }
+#cam{ position:fixed; inset:0; z-index:60; background:#000; }
+#cam.hidden{ display:none; }
+#camVideo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+#camFlash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
+#camFlash.on{ opacity:.85; transition:none; }
+#camClose, #camFlip{
+  position:absolute; top:calc(16px + env(safe-area-inset-top)); width:48px; height:48px; border-radius:50%;
+  border:0; background:rgba(0,0,0,.45); color:#fff; font-size:22px; cursor:pointer;
+}
+#camClose{ left:16px; }
+#camFlip{ right:16px; }
+#camShot{
+  position:absolute; left:50%; bottom:calc(32px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  width:78px; height:78px; border-radius:50%; border:5px solid #fff; background:rgba(255,255,255,.35); cursor:pointer;
+}
+#camShot:active{ background:#fff; }
+#camToast{
+  position:absolute; left:50%; bottom:calc(128px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  background:rgba(0,0,0,.6); color:#fff; padding:8px 16px; border-radius:20px; font-size:15px;
+  white-space:nowrap; opacity:0; transition:opacity .3s;
+}
+#camToast.on{ opacity:1; }
 #quick{
   position:fixed; inset:0; z-index:50; background:var(--navy);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;
@@ -417,6 +439,15 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 <body>
 
 <!-- codice assente o sconosciuto -->
+<div id="cam" class="hidden">
+  <video id="camVideo" autoplay muted playsinline></video>
+  <div id="camFlash"></div>
+  <button type="button" id="camClose" aria-label="Chiudi">✕</button>
+  <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
+  <div id="camToast"></div>
+  <button type="button" id="camShot" aria-label="Scatta"></button>
+</div>
+
 <div id="quick" class="hidden">
   <button type="button" id="quickGo"></button>
   <button type="button" id="quickSkip">Altre opzioni</button>
@@ -452,9 +483,13 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
         <a class="btn btn-primary" id="showLink" href="index.html">&#9654; Guarda lo slideshow</a>
       </div>
 
+    </section>
+
+    <!-- OPZIONI -->
+    <section id="tab-opt" role="tabpanel" class="hidden">
       <!-- quello che vede chi scansiona il tuo QR code: ogni codice ha i suoi -->
       <div class="card">
-        <h2>Il tuo slideshow</h2>
+        <h2>Opzioni</h2>
         <p class="lead">Nome e messaggio compaiono sotto il titolo, a chi apre il tuo QR code.</p>
 
         <label class="field">
@@ -553,6 +588,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     <button role="tab" data-tab="show" aria-selected="true" type="button"><span class="ic">▶</span>Slideshow</button>
     <button role="tab" data-tab="up" aria-selected="false" type="button"><span class="ic">📷</span>Carica</button>
     <button role="tab" data-tab="mine" aria-selected="false" type="button"><span class="ic">🖼</span>Le mie foto</button>
+    <button role="tab" data-tab="opt" aria-selected="false" type="button"><span class="ic">⚙️</span>Opzioni</button>
   </nav>
 
 </div>
@@ -616,18 +652,108 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       refreshSend();
     }
 
-    if(st.open === 'camera' || st.open === 'gallery'){
-      const cam = st.open === 'camera';
-      $('quickGo').innerHTML = cam ? '📷<br>Scatta' : '🖼<br>Galleria';
+    if(st.open === 'camera'){
+      openCam();
+    }else if(st.open === 'gallery'){
+      $('quickGo').innerHTML = '🖼<br>Galleria';
       $('quickGo').onclick = () => {
         $('quick').classList.add('hidden');
-        $(cam ? 'camInput' : 'galInput').click();
+        $('galInput').click();
       };
       $('quick').classList.remove('hidden');
     }
   }
 
   $('quickSkip').addEventListener('click', () => $('quick').classList.add('hidden'));
+
+  // ------------------------------------------------------ fotocamera
+
+  let camStream = null;
+  let camFacing = 'environment';
+  let camShots = 0;
+  let toastTimer = null;
+
+  function camToast(text){
+    const t = $('camToast');
+    t.textContent = text;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+  }
+
+  function stopCam(){
+    if(camStream) camStream.getTracks().forEach(tr => tr.stop());
+    camStream = null;
+  }
+
+  async function openCam(){
+    stopCam();
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      return;   // browser vecchio: resta la scheda Carica con il pulsante Scatta
+    }
+
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: camFacing }, width: { ideal: 4096 }, height: { ideal: 3072 } }
+      });
+    }catch(e){
+      // permesso negato o fotocamera occupata: si resta su Carica
+      $('upMsg').className = 'msg bad';
+      $('upMsg').textContent = 'Fotocamera non disponibile: usa il pulsante «Scatta».';
+      return;
+    }
+
+    $('camVideo').srcObject = camStream;
+    $('cam').classList.remove('hidden');
+    camShots = 0;
+  }
+
+  function closeCam(){
+    stopCam();
+    $('cam').classList.add('hidden');
+  }
+
+  $('camClose').addEventListener('click', closeCam);
+
+  $('camFlip').addEventListener('click', () => {
+    camFacing = camFacing === 'environment' ? 'user' : 'environment';
+    openCam();
+  });
+
+  // il mirino non resta acceso col telefono in tasca o su un'altra app
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden && camStream) closeCam();
+  });
+
+  $('camShot').addEventListener('click', () => {
+    const v = $('camVideo');
+    if(!camStream || !v.videoWidth) return;
+
+    const c = document.createElement('canvas');
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+
+    $('camFlash').classList.add('on');
+    requestAnimationFrame(() => requestAnimationFrame(() => $('camFlash').classList.remove('on')));
+
+    c.toBlob(blob => {
+      if(!blob) return;
+
+      const name = 'scatto_' + Date.now() + '.jpg';
+      addFiles([new File([blob], name, { type: 'image/jpeg' })]);
+      camShots++;
+
+      if($('consent').checked){
+        camToast('Foto ' + camShots + ' · invio…');
+        sendAll();
+      }else{
+        camToast('Foto pronta: spunta la dichiarazione in Carica per inviarla');
+      }
+    }, 'image/jpeg', 0.92);
+  });
 
   async function saveSettings(){
     const out = $('setMsgOut');
@@ -708,7 +834,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false');
     });
 
-    ['show', 'up', 'mine'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+    ['show', 'up', 'mine', 'opt'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
 
     try{ sessionStorage.setItem('sd-tab', name); }catch(e){}
 
@@ -893,9 +1019,15 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     return false;
   }
 
-  $('sendBtn').addEventListener('click', async () => {
+  let sendAgain = false;
+
+  $('sendBtn').addEventListener('click', () => sendAll());
+
+  async function sendAll(){
+    if(sending){ sendAgain = true; return; }
+
     const todo = queue.filter(q => q.state === 'wait' || q.state === 'err');
-    if(!todo.length || sending) return;
+    if(!todo.length) return;
 
     sending = true;
     refreshSend();
@@ -927,7 +1059,14 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     mineLoaded = false;
     loadShowCount();
-  });
+
+    if(camStream) camToast(failed === 0 ? '✅ Inviata' : '⚠️ ' + failed + ' non inviate');
+
+    if(sendAgain){
+      sendAgain = false;
+      sendAll();
+    }
+  }
 
   // ------------------------------------------------------------ le mie foto
 
