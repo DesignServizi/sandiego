@@ -248,6 +248,25 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
   background:#fff; color:var(--ink); resize:vertical;
 }
 .field input:focus, .field textarea:focus{ outline:2px solid var(--sea); border-color:transparent; }
+.seg{ display:flex; gap:8px; flex-wrap:wrap; }
+.seg label{
+  flex:1 1 0; min-width:90px; display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:12px 8px; border:2px solid var(--line); border-radius:12px; font-weight:600;
+  color:var(--navy); cursor:pointer; font-size:15px;
+}
+.seg label:has(input:checked){ border-color:var(--navy); background:var(--cream); }
+.seg input{ accent-color:var(--navy); }
+#quick{
+  position:fixed; inset:0; z-index:50; background:var(--navy);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;
+}
+#quick.hidden{ display:none; }
+#quickGo{
+  width:min(80vw,320px); aspect-ratio:1; border-radius:50%; border:0;
+  background:var(--lemon); color:var(--navy); font:inherit; font-size:24px; font-weight:700;
+  box-shadow:0 10px 40px rgba(0,0,0,.35); cursor:pointer;
+}
+#quickSkip{ background:none; border:0; color:#fff; opacity:.8; font:inherit; font-size:16px; text-decoration:underline; cursor:pointer; }
 .msg{ margin-top:12px; font-size:15px; text-align:center; min-height:1em; }
 .msg.ok{ color:var(--ok); }
 .msg.bad{ color:var(--bad); }
@@ -398,6 +417,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 <body>
 
 <!-- codice assente o sconosciuto -->
+<div id="quick" class="hidden">
+  <button type="button" id="quickGo"></button>
+  <button type="button" id="quickSkip">Altre opzioni</button>
+</div>
+
 <div id="gate" class="gate hidden">
   <img src="logo-app.jpg" alt="Eternal Happiness Convention 2026">
   <h2 id="gateTitle">Apri il link del tuo QR code</h2>
@@ -452,6 +476,20 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           <input type="checkbox" id="setRec">
           <span>Mostra il pulsante <b>Registra MP4</b> (solo da computer).</span>
         </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setConsent">
+          <span>Spunta già la dichiarazione <b>«Dichiaro di avere i diritti…»</b> quando carico le foto.</span>
+        </label>
+
+        <div class="field">
+          <span>All'apertura dell'app</span>
+          <div class="seg" role="radiogroup">
+            <label><input type="radio" name="setOpen" value="camera"> 📷 Scatta</label>
+            <label><input type="radio" name="setOpen" value="gallery"> 🖼 Galleria</label>
+            <label><input type="radio" name="setOpen" value="choice" checked> Scelta</label>
+          </div>
+        </div>
 
         <button class="btn btn-gold" id="setSave" type="button">Salva</button>
         <div class="msg" id="setMsgOut"></div>
@@ -557,8 +595,39 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       $('setMsg').value   = j.settings.message || '';
       $('setAuto').checked = !!j.settings.autostart;
       $('setRec').checked  = !!j.settings.rec;
+      $('setConsent').checked = !!j.settings.consent;
+
+      const open = ['camera', 'gallery'].includes(j.settings.open) ? j.settings.open : 'choice';
+      document.querySelector('input[name="setOpen"][value="' + open + '"]').checked = true;
+
+      return j.settings;
     }catch(e){}
+
+    return null;
   }
+
+  // all'apertura: dichiarazione gia' spuntata e, se scelto, fotocamera o
+  // galleria subito (dietro il tocco che il browser pretende)
+  function applyOpening(st){
+    if(!st) return;
+
+    if(st.consent){
+      $('consent').checked = true;
+      refreshSend();
+    }
+
+    if(st.open === 'camera' || st.open === 'gallery'){
+      const cam = st.open === 'camera';
+      $('quickGo').innerHTML = cam ? '📷<br>Scatta' : '🖼<br>Galleria';
+      $('quickGo').onclick = () => {
+        $('quick').classList.add('hidden');
+        $(cam ? 'camInput' : 'galInput').click();
+      };
+      $('quick').classList.remove('hidden');
+    }
+  }
+
+  $('quickSkip').addEventListener('click', () => $('quick').classList.add('hidden'));
 
   async function saveSettings(){
     const out = $('setMsgOut');
@@ -569,6 +638,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     fd.append('message', $('setMsg').value);
     if($('setAuto').checked) fd.append('autostart', '1');
     if($('setRec').checked) fd.append('rec', '1');
+    if($('setConsent').checked) fd.append('consent', '1');
+    fd.append('open', document.querySelector('input[name="setOpen"]:checked').value);
 
     $('setSave').disabled = true;
     out.className = 'msg';
@@ -622,11 +693,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     try{ $('consent').checked = localStorage.getItem('sd-consent') === '1'; }catch(e){}
 
-    loadSettings();
+    // si apre sempre su Carica: e' quello che serve di piu' al congresso
+    showTab('up');
 
-    let start = 'show';
-    try{ start = sessionStorage.getItem('sd-tab') || 'show'; }catch(e){}
-    showTab(start);
+    loadSettings().then(applyOpening);
 
     loadShowCount();
   }
