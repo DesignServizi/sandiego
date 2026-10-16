@@ -941,6 +941,13 @@
     outKF: [{ opacity:1 }, { opacity:0 }]
   };
 
+  // fade out e poi fade in: prima sparisce la vecchia, poi sale la nuova
+  const DIP_FADE = {
+    inKF:  [{ opacity:0 }, { opacity:0, offset:.5 }, { opacity:1 }],
+    outKF: [{ opacity:1 }, { opacity:0, offset:.5 }, { opacity:0 }]
+  };
+  const DIP_MS = 2400;
+
   // targets: array di { el, mode } dove mode e' 'cover' o 'backdrop'
   // 'backdrop' (foto sfocate dietro) puo' zoomare di piu' tanto e' fuori fuoco;
   // 'cover' (pieno schermo nitido) resta piu' contenuto per non tagliare troppo il soggetto
@@ -1245,8 +1252,10 @@
 
   // 'none' = passaggio netto, deciso nel pannello: la diapositiva compare di
   // colpo, senza dissolvenza ne' effetti 3D. Assente = effetto a sorte
+  // 'dip' = dissolvenza in uscita e poi in entrata, passando dal nero (la usa
+  // la diapositiva che separa le foto del delegato da quelle comuni)
   function fxOf(item){
-    return (item && item.fx === 'none') ? 'none' : null;
+    return (item && (item.fx === 'none' || item.fx === 'dip')) ? item.fx : null;
   }
 
   function fitOf(item){
@@ -2037,8 +2046,10 @@
     // per non avere due strade diverse da mantenere
     const netto = built.fx === 'none';
 
-    const effect = (built.skipEffect || netto) ? PLAIN_FADE : pickEffect();
-    const transitionMs = netto ? 0 : TRANSITION_MS;
+    const dip = built.fx === 'dip';
+
+    const effect = dip ? DIP_FADE : (built.skipEffect || netto) ? PLAIN_FADE : pickEffect();
+    const transitionMs = netto ? 0 : dip ? DIP_MS : TRANSITION_MS;
 
     inLayer.style.zIndex = 2;
     outLayer.style.zIndex = 1;
