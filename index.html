@@ -1,899 +1,2451 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
+<script>/* GitHub Pages non forza ancora https */if(location.protocol==='http:'&&location.hostname!=='localhost')location.replace('https:'+location.href.slice(5));</script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>San Diego 2026 · Foto</title>
-<meta name="theme-color" content="#13294b">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="San Diego 2026">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" href="apple-touch-icon.png">
-
-<!--
-  App dei delegati - Eternal Happiness Convention 2026, San Diego.
-
-  Si apre dal QR code del delegato: index.html?u=<codice>. Tre schede:
-    Slideshow   apre slideshow.html?u=<codice> (foto comuni + foto del delegato)
-    Carica      scatta o sceglie foto e le invia nella cartella del delegato
-    Le mie foto le foto del delegato, che puo' eliminare
-
-  Questa pagina sta su GitHub Pages (solo statico): caricamenti, elenco e
-  cancellazioni li fa il server, www.amalfibelvedere.it/sandiego/api.php,
-  che tiene il token. Il conto alla rovescia di prima e' in countdown.html.
--->
-
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>San Diego 2026 — Slideshow</title>
 <style>
-:root{
-  --navy:#13294b;
-  --navy-2:#1d3a66;
-  --gold:#c9a13b;
-  --lemon:#f2c230;
-  --sea:#2b7bb9;
-  --cream:#fbf7ee;
-  --card:#ffffff;
-  --ink:#1c2533;
-  --muted:#6b7686;
-  --line:#e6e0d2;
-  --ok:#1f8a4c;
-  --bad:#c0392b;
-  --tabbar:64px;
-}
 
-*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  :root{
+    --transition-ms: 1600;
+  }
 
-html,body{ margin:0; }
+  *{ box-sizing:border-box; }
 
-body{
-  background:var(--cream);
-  color:var(--ink);
-  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  min-height:100vh;
-  padding-bottom:calc(var(--tabbar) + env(safe-area-inset-bottom) + 16px);
-}
+  html,body{
+    margin:0;
+    height:100%;
+    background:#000;
+    overflow:hidden;
+    font-family:'Segoe UI',Arial,sans-serif;
+  }
 
-/* ---------- testata ---------- */
-header{
-  background:linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%);
-  color:#fff;
-  padding:calc(14px + env(safe-area-inset-top)) 16px 18px;
-  display:flex;
-  align-items:center;
-  gap:14px;
-}
+  #stage{
+    position:fixed;
+    inset:0;
+    perspective:1800px;
+    perspective-origin:50% 50%;
+    background:#000;
+  }
 
-header img{
-  width:64px; height:64px;
-  border-radius:50%;
-  border:2px solid var(--gold);
-  background:#fff;
-  flex:none;
-}
+  .slide{
+    position:absolute;
+    inset:0;
+    opacity:0;
+    overflow:hidden;
+    transform-style:preserve-3d;
+    backface-visibility:hidden;
+    will-change:transform,opacity;
+  }
 
-header .t1{
-  font-size:13px;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  color:var(--lemon);
-}
+  /* layout 1: pieno schermo classico */
+  .cover-img{
+    position:absolute;
+    inset:-6%;
+    background-size:cover;
+    background-position:center;
+    will-change:transform;
+  }
 
-header .t2{
-  font-size:20px;
-  font-weight:700;
-  margin-top:2px;
-}
+  /* layout 2: foto intera (nessun taglio) su sfondo sfocato della stessa immagine */
+  .contain-wrap{ position:absolute; inset:0; }
 
-header .who{
-  font-size:13px;
-  opacity:.75;
-  margin-top:4px;
-}
+  .contain-wrap .backdrop{
+    position:absolute;
+    inset:-15%;
+    background-size:cover;
+    background-position:center;
+    filter:blur(60px) brightness(.55) saturate(1.3);
+    will-change:transform;
+  }
 
-main{
-  max-width:640px;
-  margin:0 auto;
-  padding:16px;
-}
+  .contain-wrap .frame{
+    position:absolute;
+    inset:5%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
 
-.card{
-  background:var(--card);
-  border-radius:18px;
-  padding:20px;
-  box-shadow:0 4px 18px rgba(19,41,75,.08);
-  margin-bottom:16px;
-}
+  /* bordo bianco che aderisce alla foto (larghezza/altezza esatte impostate
+     via JS in pixel, calcolate dalla proporzione reale della foto), con
+     rilievo 3D: una riga chiara e una scura sul bordo interno + doppia ombra
+     per l'effetto sollevato */
+  .contain-wrap .photo{
+    background-color:#fff;
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
+    background-origin:content-box;
+    padding:20px;
+    box-sizing:border-box;
+    border-radius:6px;
+    will-change:transform;
+    /* ombra piu' marcata: l'immagine ora oscilla lentamente in 3D, una
+       resa piu' profonda vende meglio l'effetto "sospesa nell'aria" */
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.9),
+      inset 0 -1px 0 rgba(0,0,0,.08),
+      0 14px 28px rgba(0,0,0,.3),
+      0 50px 100px rgba(0,0,0,.6),
+      0 0 80px rgba(255,255,255,.32);
+  }
 
-h2{
-  margin:0 0 6px;
-  font-size:20px;
-  color:var(--navy);
-}
+  /* layout 3: due foto insieme, coreografico */
+  .duo-wrap{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:3vw;
+    padding:6vw 5vw;
+  }
 
-.lead{
-  margin:0 0 16px;
-  color:var(--muted);
-  line-height:1.5;
-  font-size:15px;
-}
+  /* con la didascalia sotto, le due foto si alzano per farle posto: scritte
+     grandi e centrate in basso finirebbero altrimenti sopra le facce */
+  .duo-wrap--cap{
+    padding-bottom:20vh;
+  }
 
-/* ---------- bottoni ---------- */
-.btn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  width:100%;
-  min-height:56px;
-  padding:14px 18px;
-  border:none;
-  border-radius:16px;
-  font-size:18px;
-  font-weight:600;
-  text-decoration:none;
-  cursor:pointer;
-  font-family:inherit;
-}
+  /* un unico sfondo condiviso (una delle due foto), molto sfocato e attenuato,
+     dietro a entrambe - non piu' uno sfocato per pannello */
+  .duo-wrap .sharedBackdrop{
+    position:absolute;
+    inset:-20%;
+    background-size:cover;
+    background-position:center;
+    filter:blur(55px) brightness(.45);
+    opacity:.8;
+    will-change:transform;
+  }
 
-.btn-primary{ background:var(--navy); color:#fff; }
-.btn-gold{ background:var(--lemon); color:var(--navy); }
-.btn-outline{ background:#fff; color:var(--navy); border:2px solid var(--navy); }
-.btn-danger{ background:var(--bad); color:#fff; }
-.btn:disabled{ opacity:.45; cursor:default; }
+  .duo-panel{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    will-change:transform;
+  }
 
-.btnRow{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  /* foto con bordo bianco (larghezza/altezza esatte impostate via JS in
+     pixel, cosi' il bordo aderisce sempre) + rilievo 3D e alone luminoso,
+     come una stampa fotografica appena sollevata dal tavolo */
+  .duo-panel .photo{
+    background-color:#fff;
+    background-size:contain;
+    background-repeat:no-repeat;
+    background-position:center;
+    background-origin:content-box;
+    padding:16px;
+    box-sizing:border-box;
+    border-radius:4px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.9),
+      inset 0 -1px 0 rgba(0,0,0,.08),
+      0 8px 16px rgba(0,0,0,.25),
+      0 25px 55px rgba(0,0,0,.5),
+      0 0 55px rgba(255,255,255,.28);
+  }
 
-/* ---------- slideshow ---------- */
-.hero{
-  position:relative;
-  overflow:hidden;
-  border-radius:18px;
-  aspect-ratio:4/3;
-  background:var(--navy) center/cover no-repeat;
-  margin-bottom:16px;
-}
+  /* caption animata: attiva quando il nome file inizia con "_" */
+  .caption{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:8%;
+    display:flex;
+    justify-content:center;
+    padding:0 8%;
+    pointer-events:none;
+    z-index:3;
+    opacity:0;
+    transform:translateY(18px);
+  }
 
-.hero::after{
-  content:"";
-  position:absolute; inset:0;
-  background:linear-gradient(to top, rgba(19,41,75,.85), rgba(19,41,75,0) 60%);
-}
+  .caption-inner{
+    max-width:100%;
+    min-width:0;
+    overflow:hidden;
+  }
 
-.hero .count{
-  position:absolute;
-  left:16px; bottom:14px;
-  color:#fff;
-  z-index:1;
-  font-size:15px;
-}
+  .caption-text{
+    display:inline-block;
+    white-space:nowrap;
+    color:#fff;
+    font-weight:300;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    font-size:clamp(15px,2.3vw,28px);
+    padding:12px 30px;
+    background:rgba(10,10,10,.4);
+    border-radius:40px;
+    box-shadow:0 12px 34px rgba(0,0,0,.4);
+  }
 
-.hero .count b{ font-size:28px; display:block; }
+  /* didascalia della foto singola: non piu' la pillola in basso al centro, ma
+     una scritta grande sul fianco sinistro, a meta' altezza. Niente sfondo:
+     la leggibilita' sulle foto chiare la tiene l'ombra nera */
+  .caption--photo{
+    top:0;
+    bottom:0;
+    align-items:center;
+    justify-content:flex-start;
+    padding:0 7%;
+  }
 
-/* ---------- carica ---------- */
-.queue{
-  display:grid;
-  grid-template-columns:repeat(3, 1fr);
-  gap:8px;
-  margin:16px 0;
-}
+  .caption--photo .caption-inner{
+    max-width:56%;
+  }
 
-.qItem{
-  position:relative;
-  aspect-ratio:1;
-  border-radius:12px;
-  overflow:hidden;
-  background:#ddd center/cover no-repeat;
-}
+  .caption--photo .caption-text{
+    display:block;
+    white-space:normal;
+    text-align:left;
+    background:none;
+    box-shadow:none;
+    padding:0;
+    font-size:clamp(30px,5.2vw,78px);
+    font-weight:300;
+    line-height:1.2;
+    letter-spacing:.06em;
+    /* tre ombre sovrapposte: un contorno stretto che stacca le lettere anche
+       sul bianco (la foto intera ha una cornice chiara proprio li' sotto),
+       un'ombra corta per il rilievo e un alone largo che scurisce la zona */
+    text-shadow:0 0 3px rgba(0,0,0,.85), 0 2px 7px rgba(0,0,0,.8), 0 6px 34px rgba(0,0,0,.7);
+  }
 
-.qItem .st{
-  position:absolute; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  font-size:26px;
-  background:rgba(0,0,0,.25);
-  color:#fff;
-}
+  /* le parole non si spezzano a meta': ogni lettera e' un elemento a se'
+     (serve per farle comparire una dopo l'altra) e senza questo il browser
+     andrebbe a capo dentro la parola */
+  .caption-word{
+    display:inline-block;
+    white-space:nowrap;
+  }
 
-.qItem.done .st{ background:rgba(31,138,76,.45); }
-.qItem.err .st{ background:rgba(192,57,43,.6); font-size:13px; padding:6px; text-align:center; }
+  .caption-letter{
+    display:inline-block;
+    white-space:pre;
+  }
 
-.qItem .rm{
-  position:absolute; top:4px; right:4px;
-  width:28px; height:28px;
-  border-radius:50%;
-  border:none;
-  background:rgba(0,0,0,.6);
-  color:#fff;
-  font-size:16px;
-  line-height:28px;
-  padding:0;
-}
+  /* didascalia della diapositiva a due foto: stessa scritta grande delle
+     altre (prima era una targhetta piccola sotto ciascuna foto), ma qui non
+     puo' stare sul fianco - le foto occupano tutta la larghezza - quindi va
+     in basso, centrata, sotto la coppia */
+  .caption--pair{
+    top:auto;
+    bottom:4%;
+    align-items:flex-end;
+    justify-content:center;
+    padding:0 6%;
+  }
 
-.consent{
-  display:flex;
-  gap:10px;
-  align-items:flex-start;
-  font-size:14px;
-  color:var(--muted);
-  line-height:1.45;
-  margin:12px 0 16px;
-}
+  .caption--pair .caption-inner{
+    max-width:86%;
+  }
 
-.consent input{ width:22px; height:22px; flex:none; margin-top:1px; accent-color:var(--navy); }
+  .caption--pair .caption-text{
+    text-align:center;
+  }
 
-details.info{ font-size:13px; color:var(--muted); line-height:1.5; margin-top:14px; }
-details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
+  /* diapositiva di solo testo ("Qui eravamo in assemblea") */
+  .textSlideBg{
+    position:absolute;
+    inset:0;
+  }
 
-.progress{
-  height:10px;
-  border-radius:10px;
-  background:var(--line);
-  overflow:hidden;
-  margin-top:14px;
-}
+  /* le tre varianti chiare di sempre: valgono quando la diapositiva non ha
+     uno sfondo scelto nel pannello (allora se ne pesca una a caso) */
+  .textSlideBg--a{ background:#ffffff; }
+  .textSlideBg--b{ background:#faf6ee; }
+  .textSlideBg--c{ background:#f2f5f8; }
 
-.progress div{
-  height:100%;
-  width:0;
-  background:linear-gradient(90deg, var(--sea), var(--lemon));
-  transition:width .3s;
-}
+  /* tavolozza scelta dal pannello (campo 'bg' della diapositiva di testo).
+     Gli stessi colori sono ripetuti nel pannello per le pastiglie: se se ne
+     aggiunge uno va aggiunto in tutti e tre i posti (qui, TEXT_BG piu' sotto,
+     e TEXT_BG nel pannello) */
+  .textSlideBg--bianco  { background:#ffffff; }
+  .textSlideBg--crema   { background:#faf6ee; }
+  .textSlideBg--perla   { background:#f2f5f8; }
+  .textSlideBg--sabbia  { background:#e8dcc8; }
+  .textSlideBg--salvia  { background:#dde7dc; }
+  .textSlideBg--notte   { background:#10233d; }
+  .textSlideBg--nero    { background:#0d0d0d; }
+  .textSlideBg--bosco   { background:#17321f; }
+  .textSlideBg--bordeaux{ background:#3d1220; }
+  .textSlideBg--tramonto{ background:linear-gradient(160deg,#f0a75c,#d0574f 55%,#6f2a58); }
+  .textSlideBg--mare    { background:linear-gradient(160deg,#0e4166,#1d7fa5 55%,#7fc3c0); }
 
-.msg{ margin-top:12px; font-size:15px; text-align:center; min-height:1em; }
-.msg.ok{ color:var(--ok); }
-.msg.bad{ color:var(--bad); }
+  /* su fondo scuro il testo scuro sparirebbe */
+  .slide--darkText .caption--title .caption-text{
+    color:#f6f3ec;
+    text-shadow:0 2px 18px rgba(0,0,0,.45);
+  }
 
-/* ---------- le mie foto ---------- */
-.mineHead{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:12px;
-}
+  .caption--title{
+    top:0;
+    bottom:0;
+    align-items:center;
+    padding:0 12%;
+  }
 
-.linkBtn{
-  background:none;
-  border:none;
-  color:var(--sea);
-  font-size:15px;
-  font-weight:600;
-  padding:6px 0;
-  font-family:inherit;
-}
+  .caption--title .caption-text{
+    display:block;
+    white-space:normal;
+    text-align:center;
+    background:none;
+    box-shadow:none;
+    color:#2a2a2a;
+    text-transform:none;
+    font-weight:200;
+    letter-spacing:.04em;
+    font-size:clamp(26px,5vw,64px);
+    line-height:1.3;
+    padding:0;
+  }
 
-.grid{
-  display:grid;
-  grid-template-columns:repeat(3, 1fr);
-  gap:6px;
-}
+  /* vignette per dare profondita' e leggibilita' */
+  #stage::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    box-shadow:inset 0 0 18vw 4vw rgba(0,0,0,.55);
+  }
 
-.ph{
-  position:relative;
-  aspect-ratio:1;
-  border-radius:10px;
-  overflow:hidden;
-  background:#e9e4d8;
-  border:none;
-  padding:0;
-}
+  #overlay{
+    position:fixed;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:28px;
+    background:radial-gradient(ellipse at center, #12324a 0%, #04121c 100%);
+    color:#fff;
+    z-index:10;
+    text-align:center;
+    padding:20px;
+  }
 
-.ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+  #overlay h1{
+    font-weight:300;
+    letter-spacing:.12em;
+    font-size:clamp(28px,5vw,52px);
+    margin:0;
+    text-transform:uppercase;
+  }
 
-.ph .tick{
-  position:absolute; top:6px; right:6px;
-  width:26px; height:26px;
-  border-radius:50%;
-  border:2px solid #fff;
-  background:rgba(0,0,0,.25);
-  color:#fff;
-  font-size:15px;
-  line-height:22px;
-  text-align:center;
-}
+  #overlay p{
+    margin:0;
+    opacity:.7;
+    font-size:14px;
+  }
 
-.ph.sel{ outline:4px solid var(--bad); outline-offset:-4px; }
-.ph.sel .tick{ background:var(--bad); }
-.ph.sel .tick::before{ content:"✓"; }
+  #startAtRow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:13px;
+    color:rgba(255,255,255,.55);
+  }
 
-.empty{ text-align:center; color:var(--muted); padding:30px 10px; line-height:1.5; }
+  #startAtRow input{
+    width:80px;
+    padding:7px 10px;
+    border-radius:10px;
+    border:1px solid rgba(255,255,255,.3);
+    background:rgba(255,255,255,.06);
+    color:#fff;
+    font-size:14px;
+    text-align:center;
+  }
 
-.delBar{
-  position:fixed;
-  left:0; right:0;
-  bottom:calc(var(--tabbar) + env(safe-area-inset-bottom));
-  padding:10px 16px;
-  background:rgba(251,247,238,.96);
-  border-top:1px solid var(--line);
-  z-index:20;
-}
+  #startAtRow span{
+    font-size:12px;
+    color:rgba(255,255,255,.35);
+  }
 
-.delBar .btn{ max-width:608px; margin:0 auto; }
+  #startBtn{
+    padding:16px 40px;
+    font-size:18px;
+    letter-spacing:.05em;
+    border-radius:40px;
+    border:1px solid rgba(255,255,255,.5);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    cursor:pointer;
+    transition:background .25s, transform .25s;
+  }
 
-/* ---------- barra delle schede ---------- */
-nav{
-  position:fixed;
-  left:0; right:0; bottom:0;
-  height:calc(var(--tabbar) + env(safe-area-inset-bottom));
-  padding-bottom:env(safe-area-inset-bottom);
-  background:#fff;
-  border-top:1px solid var(--line);
-  display:grid;
-  grid-template-columns:repeat(3, 1fr);
-  z-index:30;
-}
+  #startBtn:hover{
+    background:rgba(255,255,255,.22);
+    transform:scale(1.04);
+  }
 
-nav button{
-  background:none;
-  border:none;
-  font-family:inherit;
-  font-size:12px;
-  color:var(--muted);
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:3px;
-}
+  #startBtn:disabled{
+    opacity:.5;
+    cursor:default;
+    transform:none;
+  }
 
-nav button .ic{ font-size:22px; line-height:1; }
-nav button[aria-selected="true"]{ color:var(--navy); font-weight:700; }
-nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
+  #btnRow{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
 
-.badge{
-  display:inline-block;
-  min-width:20px;
-  padding:1px 6px;
-  border-radius:10px;
-  background:var(--lemon);
-  color:var(--navy);
-  font-size:11px;
-  font-weight:700;
-}
+  /* stesso tasto dell'avvio, un po' piu' piccolo e con il pallino rosso */
+  #recBtn{
+    padding:14px 26px;
+    font-size:15px;
+    letter-spacing:.05em;
+    border-radius:40px;
+    border:1px solid rgba(255,120,120,.5);
+    background:rgba(255,80,80,.12);
+    color:#ffd9d9;
+    cursor:pointer;
+    transition:background .25s, transform .25s;
+  }
 
-/* ---------- codice non valido ---------- */
-.gate{
-  max-width:480px;
-  margin:40px auto;
-  padding:16px;
-  text-align:center;
-}
+  #recBtn:hover{
+    background:rgba(255,80,80,.28);
+    transform:scale(1.04);
+  }
 
-.gate img{ width:180px; border-radius:50%; }
-.gate h2{ margin-top:20px; }
+  #recBtn:disabled{
+    opacity:.5;
+    cursor:default;
+    transform:none;
+  }
 
-.hidden{ display:none !important; }
+  #recHint{
+    max-width:640px;
+    line-height:1.5;
+    color:rgba(255,255,255,.4) !important;
+    font-size:12px !important;
+  }
 
-/* finestra di conferma (niente confirm() del browser) */
-.modal{
-  position:fixed; inset:0;
-  background:rgba(19,41,75,.55);
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;
-  z-index:50;
-  padding:16px;
-}
+  #recHint b{ color:rgba(255,255,255,.65); font-weight:600; }
 
-.modal .box{
-  background:#fff;
-  border-radius:20px;
-  padding:22px;
-  width:100%;
-  max-width:480px;
-  margin-bottom:env(safe-area-inset-bottom);
-}
+  #buildInfo{
+    margin-top:22px;
+    color:rgba(255,255,255,.35);
+    font-size:12px;
+    letter-spacing:.04em;
+  }
 
-.modal p{ margin:0 0 18px; font-size:17px; line-height:1.4; }
+  /* numero della diapositiva in corso, si accende solo con ?vs=1
+     nell'indirizzo: serve a ritrovare al volo la card nel pannello di
+     gestione, non deve comparire in proiezione */
+  #slideTag{
+    position:fixed;
+    top:14px;
+    right:22px;
+    z-index:6;
+    display:none;
+    color:rgba(255,255,255,.92);
+    font-size:64px;
+    font-weight:bold;
+    line-height:1;
+    letter-spacing:.02em;
+    text-shadow:0 2px 6px rgba(0,0,0,.85), 0 0 26px rgba(0,0,0,.7);
+  }
+
+  #slideTag .tot{
+    font-size:24px;
+    font-weight:normal;
+    opacity:.65;
+  }
+
+  /* niente scritte fisse sopra le foto: in proiezione (e in registrazione)
+     lo schermo resta pulito. L'indicazione "ESC per uscire dal fullscreen"
+     stava qui ed e' stata tolta */
+
+  /* sul telefono registrazione MP4 e "parti dalla diapositiva" non servono
+     (getDisplayMedia li' non esiste): restano solo per il computer */
+  @media (pointer:coarse){
+    #recBtn, #recHint, #startAtRow{ display:none !important; }
+  }
+
+  .hidden{ display:none !important; }
+
 </style>
 </head>
 <body>
 
-<!-- codice assente o sconosciuto -->
-<div id="gate" class="gate hidden">
-  <img src="logo-app.jpg" alt="Eternal Happiness Convention 2026">
-  <h2 id="gateTitle">Apri il link del tuo QR code</h2>
-  <p class="lead" id="gateText">Questa pagina funziona solo dal QR code personale stampato sul tuo pass.</p>
-</div>
+  <div id="overlay">
+    <h1>Eternal Happiness · San Diego 2026</h1>
+    <p id="statusText">Pronto per avviare lo slideshow</p>
 
-<div id="app" class="hidden">
+    <!-- serve alle prove: per rivedere la diapositiva 60 non si ha voglia di
+         aspettare le prime 59. Vuoto = si parte dall'inizio -->
+    <label id="startAtRow">
+      Parti dalla diapositiva
+      <input id="startAt" type="number" min="1" step="1" placeholder="1">
+      <span>vuoto = dall'inizio</span>
+    </label>
 
-  <header>
-    <img src="logo-app.jpg" alt="">
-    <div>
-      <div class="t1">Eternal Happiness</div>
-      <div class="t2">San Diego 2026</div>
-      <div class="who">Codice: <b id="whoCode"></b></div>
+    <div id="btnRow">
+      <button id="startBtn">&#9654; Avvia slideshow</button>
+
+      <!-- registra la proiezione cosi' com'e' (transizioni 3D e musica
+           comprese) catturando questa scheda del browser, e a fine
+           slideshow scarica il filmato -->
+      <button id="recBtn">&#9679; Registra MP4</button>
     </div>
-  </header>
 
-  <main>
-
-    <!-- SLIDESHOW -->
-    <section id="tab-show" role="tabpanel">
-      <div class="hero" id="hero">
-        <div class="count"><b id="showCount">…</b>foto nello slideshow</div>
-      </div>
-      <div class="card">
-        <h2>I ricordi del congresso</h2>
-        <p class="lead">Le foto di tutti i fratelli più quelle che hai scattato tu, una dopo l'altra. Le foto che invii mentre lo guardi si aggiungono in coda.</p>
-        <a class="btn btn-primary" id="showLink" href="slideshow.html">&#9654; Guarda lo slideshow</a>
-      </div>
-    </section>
-
-    <!-- CARICA -->
-    <section id="tab-up" role="tabpanel" class="hidden">
-      <div class="card">
-        <h2>Invia le tue foto</h2>
-        <p class="lead">Scatta o scegli le foto dalla galleria: finiscono nel tuo slideshow personale.</p>
-
-        <div class="btnRow">
-          <button class="btn btn-gold" id="camBtn" type="button">📷 Scatta</button>
-          <button class="btn btn-outline" id="galBtn" type="button">🖼 Galleria</button>
-        </div>
-
-        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-        <input type="file" id="galInput" accept="image/*" multiple hidden>
-
-        <div class="queue" id="queue"></div>
-
-        <label class="consent">
-          <input type="checkbox" id="consent">
-          <span>Dichiaro di avere i diritti sulle foto che invio e accetto l'informativa qui sotto.</span>
-        </label>
-
-        <button class="btn btn-primary" id="sendBtn" type="button" disabled>Invia le foto</button>
-
-        <div class="progress hidden" id="progress"><div></div></div>
-        <div class="msg" id="upMsg"></div>
-
-        <details class="info">
-          <summary>Informativa</summary>
-          <p>Le foto che invii vengono salvate nella raccolta fotografica della <b>San Diego Convention 2026 – Amalfi Belvedere – Eternal Happiness</b> e mostrate nel tuo slideshow personale, che può vedere chiunque abbia il link del tuo QR code. Le foto vengono ridotte di dimensione prima dell'invio.</p>
-          <p>Inviandole dichiari di possedere i diritti necessari sulle immagini. Puoi eliminarle in qualsiasi momento dalla scheda «Le mie foto».</p>
-        </details>
-      </div>
-    </section>
-
-    <!-- LE MIE FOTO -->
-    <section id="tab-mine" role="tabpanel" class="hidden">
-      <div class="card">
-        <div class="mineHead">
-          <h2 style="margin:0">Le mie foto <span class="badge" id="mineBadge">0</span></h2>
-          <button class="linkBtn" id="selAllBtn" type="button">Seleziona tutte</button>
-        </div>
-        <div class="grid" id="grid"></div>
-        <div class="empty hidden" id="mineEmpty">Non hai ancora inviato foto.<br>Usa la scheda «Carica».</div>
-        <div class="msg" id="mineMsg"></div>
-      </div>
-    </section>
-
-  </main>
-
-  <div class="delBar hidden" id="delBar">
-    <button class="btn btn-danger" id="delBtn" type="button">🗑 Elimina selezionate</button>
+    <p id="recHint">La registrazione dura quanto lo slideshow: Chrome chiede quale scheda condividere — scegli <b>questa</b> e spunta <b>Condividi anche l'audio della scheda</b>. Non cambiare scheda durante la registrazione.</p>
+    <!-- di questo file girano in giro copie vecchie (E:\slideshow.html e
+         simili): la riga qui sotto dice a colpo d'occhio se quella aperta e'
+         la versione con musica, durate e foto in diretta -->
+    <p id="buildInfo">foto comuni + foto del delegato · foto in diretta · motore Amalfi Belvedere — 16/10/2026</p>
   </div>
 
-  <nav role="tablist">
-    <button role="tab" data-tab="show" aria-selected="true" type="button"><span class="ic">▶</span>Slideshow</button>
-    <button role="tab" data-tab="up" aria-selected="false" type="button"><span class="ic">📷</span>Carica</button>
-    <button role="tab" data-tab="mine" aria-selected="false" type="button"><span class="ic">🖼</span>Le mie foto</button>
-  </nav>
-
-</div>
-
-<div class="modal hidden" id="modal">
-  <div class="box">
-    <p id="modalText"></p>
-    <div class="btnRow">
-      <button class="btn btn-outline" id="modalNo" type="button">Annulla</button>
-      <button class="btn btn-danger" id="modalYes" type="button">Elimina</button>
-    </div>
+  <div id="stage">
+    <div class="slide" id="slideA"></div>
+    <div class="slide" id="slideB"></div>
   </div>
-</div>
+
+  <div id="slideTag"></div>
+
+  <!-- Due lettori alternati, come i due layer delle diapositive: uno sfuma
+       mentre l'altro sale. La traccia la decidono le diapositive (campo
+       'music' in _order.json, scelto dal pannello); all'avvio si parte in
+       silenzio, niente sottofondo automatico -->
+  <audio id="musicA" preload="auto"></audio>
+  <audio id="musicB" preload="auto"></audio>
 
 <script>
 (function(){
 
-  const API = 'https://www.amalfibelvedere.it/sandiego/';
+  const OWNER  = 'DesignServizi';
+  const REPO   = 'sandiego';
+  const BRANCH = 'main';
+  const FOLDER = 'images';
 
-  // le foto del telefono pesano 3-8 MB: prima di inviarle si riducono a
-  // questo lato lungo. Al congresso la rete e' quella che e', e per uno
-  // slideshow 2560 px sono piu' che abbastanza
-  const MAX_SIDE = 2560;
-  const JPEG_QUALITY = 0.85;
+  const DISPLAY_MS = 6000;     // quanto resta in scena ogni foto, se non e' stato deciso altro
+  const TRANSITION_MS = 1600;  // durata dell'effetto 3D
 
-  const $ = id => document.getElementById(id);
+  // la durata puo' essere decisa dal pannello di gestione e viaggia dentro
+  // _order.json: una durata standard per tutti ({type:'meta',defaultDuration:6})
+  // e, se serve, una durata solo per quella diapositiva ({..., duration: 12}).
+  // Sono secondi; qui diventano millisecondi
+  let defaultHoldMs = DISPLAY_MS;
 
-  const code = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase();
-
-  // ------------------------------------------------------------ avvio
-
-  async function init(){
-    if(!code){
-      $('gate').classList.remove('hidden');
-      return;
-    }
-
-    let ok = false;
-
-    try{
-      const r = await fetch(API + 'api.php?a=check&u=' + encodeURIComponent(code), { cache:'no-store' });
-      ok = r.ok && (await r.json()).success;
-    }catch(e){
-      $('gateTitle').textContent = 'Connessione assente';
-      $('gateText').textContent = 'Controlla la rete e riapri la pagina.';
-      $('gate').classList.remove('hidden');
-      return;
-    }
-
-    if(!ok){
-      $('gateTitle').textContent = 'Codice non riconosciuto';
-      $('gate').classList.remove('hidden');
-      return;
-    }
-
-    $('whoCode').textContent = code;
-    $('showLink').href = 'slideshow.html?u=' + encodeURIComponent(code);
-    $('app').classList.remove('hidden');
-
-    try{ $('consent').checked = localStorage.getItem('sd-consent') === '1'; }catch(e){}
-
-    let start = 'show';
-    try{ start = sessionStorage.getItem('sd-tab') || 'show'; }catch(e){}
-    showTab(start);
-
-    loadShowCount();
+  function holdOf(item){
+    const sec = item && Number(item.duration);
+    return (sec > 0) ? sec * 1000 : defaultHoldMs;
   }
 
-  // ------------------------------------------------------------ schede
+  // foto caricate da foto.html mentre la proiezione e' gia' in corso:
+  // live.php dice quali sono arrivate, ed entrano nella playlist senza
+  // dover riavviare lo slideshow.
+  //
+  // Attenzione: questo file HTML non e' pubblicato insieme ai PHP - viene
+  // aperto in locale (file://) o da un altro host, e li' un 'live.php'
+  // relativo non esiste. Serve quindi l'indirizzo assoluto del sito dove
+  // girano upload_amalfibelvedere.php/live.php; live.php risponde con
+  // Access-Control-Allow-Origin: * proprio per poter essere interrogato
+  // da un'altra origine (compreso il file locale, che ha origine "null")
+  const LIVE_HOST = 'https://www.amalfibelvedere.it/sandiego/';
 
-  function showTab(name){
-    document.querySelectorAll('nav button').forEach(b => {
-      b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false');
-    });
+  // codice del delegato (index.html?u=..., il link dei QR code): oltre alle
+  // foto comuni si vedono quelle della sua cartella images/<codice>/.
+  // Senza codice escono solo le comuni (es. proiezione in sala)
+  const USER = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const USER_Q = USER ? 'u=' + encodeURIComponent(USER) : '';
 
-    ['show', 'up', 'mine'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+  const LIVE_POLL_MS = 10000;
 
-    try{ sessionStorage.setItem('sd-tab', name); }catch(e){}
+  // quante volte riprovare a scaricare una foto appena annunciata: la CDN di
+  // raw.githubusercontent puo' rispondere 404 per qualche decina di secondi
+  // dopo il commit (e tiene il 404 in cache), quindi conviene insistere per
+  // qualche minuto invece di arrendersi dopo tre tentativi
+  const LIVE_FETCH_ATTEMPTS = 18;
+  const RAW_BASE = 'https://raw.githubusercontent.com/' + OWNER + '/' + REPO + '/' + BRANCH + '/' + FOLDER + '/';
 
-    if(name === 'mine') loadMine();
-    updateDelBar();
-    window.scrollTo(0, 0);
+  // Le foto si chiedono al server (img.php), non piu' direttamente alla CDN
+  // raw di GitHub: il 17/08/2026 raw.githubusercontent ha iniziato a
+  // rispondere "429 Too Many Requests - For more on scraping GitHub..." a
+  // tutte le richieste dall'IP di casa, perche' pannello e player gli
+  // scaricavano centinaia di originali interi. img.php prende il file una
+  // volta sola con il token (API, non raw), lo tiene in cache sul server e lo
+  // serve ridimensionato.
+  // 1920 e' il lato lungo utile a una proiezione: l'originale da 6000 px non
+  // aggiunge niente sullo schermo e ci mette dieci volte tanto ad arrivare.
+  const IMG_PROXY = LIVE_HOST + 'img.php';
+  const IMG_WIDTH = 1920;
+
+  // raw resta come riserva: se il proxy non e' ancora stato caricato sul
+  // server (o il sito e' giu') la proiezione deve partire lo stesso
+  function photoUrls(name, bust){
+    return [
+      IMG_PROXY + '?f=' + encodeURIComponent(name) + '&w=' + IMG_WIDTH + (bust || ''),
+      RAW_BASE + name.split('/').map(encodeURIComponent).join('/') + (bust ? '?' + bust.replace(/^&/, '') : '')
+    ];
   }
 
-  document.querySelectorAll('nav button').forEach(b => {
-    b.addEventListener('click', () => showTab(b.dataset.tab));
-  });
+  // Le tracce musicali stanno sul server (cartella music/), non su GitHub:
+  // un mp3 pesa quanto venti foto e il repository serve alle foto.
+  // Il pannello scrive in _order.json il campo 'music' della diapositiva:
+  //   assente     la diapositiva non tocca la musica in corso
+  //   'x.mp3'     da qui parte questa traccia, sfumando la precedente
+  //   '-'         da qui la musica si spegne
+  const MUSIC_BASE = LIVE_HOST + 'music/';
+  const MUSIC_STOP = '-';
+  const MUSIC_FADE_MS = 2000;
+  const MUSIC_VOLUME = 0.7;
 
-  // ------------------------------------------------------------ slideshow
+  const overlay    = document.getElementById('overlay');
+  const statusText = document.getElementById('statusText');
+  const startBtn   = document.getElementById('startBtn');
+  const recBtn     = document.getElementById('recBtn');
+  const startAtInput = document.getElementById('startAt');
+  const stage      = document.getElementById('stage');
+  const layers     = [document.getElementById('slideA'), document.getElementById('slideB')];
+  const players    = [document.getElementById('musicA'), document.getElementById('musicB')];
 
-  function thumb(name, w){
-    return API + 'img.php?f=' + encodeURIComponent(name) + '&w=' + (w || 320);
-  }
+  let images = [];
+  let nextIndex = 0;
+  let slideTimer = null;   // attesa prima della prossima diapositiva
+  let liveTimer = null;    // polling delle foto caricate durante la proiezione
+  let startIndex = 0;   // da quale diapositiva parte la proiezione (0 = la prima)
+  let current = 0; // indice in layers[] che e' attualmente "in vista"
 
-  async function loadShowCount(){
-    try{
-      const r = await fetch(API + 'list.php?u=' + encodeURIComponent(code) + '&cb=' + Date.now(), { cache:'no-store' });
-      const data = await r.json();
-      const files = data.files || [];
+  const knownNames = new Set();  // foto gia' in playlist, per non aggiungerle due volte
+  let liveSince = 0;             // istante dell'ultima risposta di live.php
 
-      $('showCount').textContent = files.length;
+  // Come vanno proiettate le foto caricate dal pubblico a proiezione avviata
+  // (flag "live" in foto.html): sempre in coda, sempre intere e sempre con la
+  // stessa durata. La durata fissa e' il punto: sapendo che ognuna resta 3
+  // secondi si sa quante foto ci stanno prima che finisca la musica.
+  // I valori arrivano da live.php (costanti LIVE_UPLOAD_* in live_feed.php);
+  // questi sono solo la riserva se la risposta non li porta.
+  let liveFit = 'contain';
+  let liveDurationSec = 3;
 
-      // in copertina l'ultima foto arrivata
-      if(files.length){
-        $('hero').style.backgroundImage = 'url("' + thumb(files[files.length - 1].name, 1280) + '")';
-      }
-    }catch(e){
-      $('showCount').textContent = '–';
-    }
-  }
+  // precarica una foto e ne rileva l'orientamento reale (serve a scegliere il
+  // layout giusto: le foto verticali non vanno mai a pieno schermo, si taglierebbero troppo)
+  // item.urls e' un elenco di indirizzi in ordine di preferenza (prima il
+  // proxy del server, poi raw.githubusercontent come riserva): il primo che
+  // carica diventa item.url, quello che poi finisce sullo schermo.
+  // Serve perche' raw puo' rispondere 429 all'IP di chi guarda (vedi img.php)
+  // ma anche perche' il proxy potrebbe non essere ancora sul server
+  function loadItemOnce(item){
+    const urls = (item.urls && item.urls.length) ? item.urls : [item.url];
 
-  // ------------------------------------------------------------ carica
+    return new Promise((resolve) => {
+      let i = 0;
 
-  let queue = [];   // { file, url, state: 'wait'|'busy'|'done'|'err', el }
-  let sending = false;
+      const tryNext = () => {
+        if(i >= urls.length) return resolve(false);
 
-  $('camBtn').addEventListener('click', () => $('camInput').click());
-  $('galBtn').addEventListener('click', () => $('galInput').click());
+        const url = urls[i++];
+        const im = new Image();
 
-  ['camInput', 'galInput'].forEach(id => {
-    $(id).addEventListener('change', e => {
-      addFiles(e.target.files);
-      e.target.value = '';
-    });
-  });
+        im.onload = () => {
+          item.url = url;
+          item.orientation = im.naturalWidth >= im.naturalHeight ? 'landscape' : 'portrait';
+          item.aspect = im.naturalWidth / im.naturalHeight;
+          resolve(true);
+        };
 
-  $('consent').addEventListener('change', () => {
-    try{ localStorage.setItem('sd-consent', $('consent').checked ? '1' : '0'); }catch(e){}
-    refreshSend();
-  });
-
-  function addFiles(list){
-    // un giro concluso: la coda riparte vuota
-    if(queue.length && queue.every(q => q.state === 'done')) clearQueue();
-
-    Array.from(list).forEach(file => {
-      if(!/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
-
-      const item = { file: file, url: URL.createObjectURL(file), state: 'wait' };
-      const el = document.createElement('div');
-
-      el.className = 'qItem';
-      el.style.backgroundImage = 'url("' + item.url + '")';
-      el.innerHTML = '<button class="rm" type="button" aria-label="Togli">✕</button>';
-      el.querySelector('.rm').addEventListener('click', () => {
-        if(sending) return;
-        queue = queue.filter(q => q !== item);
-        URL.revokeObjectURL(item.url);
-        el.remove();
-        refreshSend();
-      });
-
-      item.el = el;
-      queue.push(item);
-      $('queue').appendChild(el);
-    });
-
-    $('upMsg').textContent = '';
-    $('upMsg').className = 'msg';
-    refreshSend();
-  }
-
-  function clearQueue(){
-    queue.forEach(q => URL.revokeObjectURL(q.url));
-    queue = [];
-    $('queue').innerHTML = '';
-    $('progress').classList.add('hidden');
-  }
-
-  function refreshSend(){
-    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err').length;
-
-    $('sendBtn').disabled = sending || !todo || !$('consent').checked;
-    $('sendBtn').textContent = sending ? 'Invio in corso…'
-      : todo ? 'Invia ' + todo + ' foto'
-      : 'Invia le foto';
-  }
-
-  function setState(item, state, text){
-    item.state = state;
-    item.el.className = 'qItem' + (state === 'done' ? ' done' : state === 'err' ? ' err' : '');
-
-    let st = item.el.querySelector('.st');
-    if(!st){
-      st = document.createElement('div');
-      st.className = 'st';
-      item.el.appendChild(st);
-    }
-
-    st.textContent = state === 'busy' ? '⏳' : state === 'done' ? '✓' : state === 'err' ? (text || 'Errore') : '';
-
-    const rm = item.el.querySelector('.rm');
-    if(rm) rm.classList.toggle('hidden', state !== 'wait' && state !== 'err');
-  }
-
-  // riduce la foto nel browser e la riporta in JPEG. Il browser applica gia'
-  // l'orientamento EXIF quando disegna l'immagine, quindi le verticali
-  // restano verticali; se qualcosa va storto si manda l'originale
-  function loadImage(url){
-    return new Promise((resolve, reject) => {
-      const im = new Image();
-      im.onload = () => resolve(im);
-      im.onerror = reject;
-      im.src = url;
-    });
-  }
-
-  async function shrink(item){
-    try{
-      const im = await loadImage(item.url);
-      const scale = Math.min(1, MAX_SIDE / Math.max(im.naturalWidth, im.naturalHeight));
-      const w = Math.round(im.naturalWidth * scale);
-      const h = Math.round(im.naturalHeight * scale);
-
-      const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
-      canvas.getContext('2d').drawImage(im, 0, 0, w, h);
-
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
-
-      if(blob && blob.size) return { blob: blob, name: 'foto.jpg' };
-    }catch(e){
-      // formato che il browser non sa disegnare: si prova con l'originale
-    }
-
-    return { blob: item.file, name: item.file.name };
-  }
-
-  async function sendOne(item){
-    setState(item, 'busy');
-
-    const ready = await shrink(item);
-    const fd = new FormData();
-
-    fd.append('a', 'upload');
-    fd.append('u', code);
-    fd.append('photo', ready.blob, ready.name);
-
-    // un secondo tentativo: in sala la rete va e viene
-    for(let attempt = 1; attempt <= 2; attempt++){
-      try{
-        const r = await fetch(API + 'api.php', { method:'POST', body:fd });
-        const j = await r.json();
-
-        if(j.success){
-          setState(item, 'done');
-          return true;
-        }
-
-        setState(item, 'err', j.error || 'Errore');
-        return false;
-      }catch(e){
-        if(attempt === 2) setState(item, 'err', 'Rete assente');
-      }
-    }
-
-    return false;
-  }
-
-  $('sendBtn').addEventListener('click', async () => {
-    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err');
-    if(!todo.length || sending) return;
-
-    sending = true;
-    refreshSend();
-
-    const bar = $('progress');
-    bar.classList.remove('hidden');
-    bar.firstElementChild.style.width = '0';
-
-    let ok = 0;
-
-    for(let i = 0; i < todo.length; i++){
-      if(await sendOne(todo[i])) ok++;
-      bar.firstElementChild.style.width = ((i + 1) / todo.length * 100) + '%';
-    }
-
-    sending = false;
-    refreshSend();
-
-    const failed = todo.length - ok;
-    const msg = $('upMsg');
-
-    if(failed === 0){
-      msg.className = 'msg ok';
-      msg.textContent = '✅ ' + (ok === 1 ? 'Foto inviata' : ok + ' foto inviate') + '. Grazie!';
-    }else{
-      msg.className = 'msg bad';
-      msg.textContent = failed + ' non inviate: tocca di nuovo «Invia» per riprovare.';
-    }
-
-    mineLoaded = false;
-    loadShowCount();
-  });
-
-  // ------------------------------------------------------------ le mie foto
-
-  let mine = [];
-  let mineLoaded = false;
-  const selected = new Set();
-
-  async function loadMine(force){
-    if(mineLoaded && !force) return;
-
-    $('mineMsg').textContent = 'Carico…';
-    $('mineMsg').className = 'msg';
-
-    try{
-      const r = await fetch(API + 'api.php?a=mine&u=' + encodeURIComponent(code) + '&cb=' + Date.now(), { cache:'no-store' });
-      const j = await r.json();
-
-      if(!j.success) throw new Error(j.error || 'errore');
-
-      mine = j.files || [];
-      mineLoaded = true;
-      $('mineMsg').textContent = '';
-    }catch(e){
-      $('mineMsg').className = 'msg bad';
-      $('mineMsg').textContent = 'Impossibile leggere le tue foto. Riprova tra poco.';
-      return;
-    }
-
-    selected.clear();
-    renderMine();
-  }
-
-  function renderMine(){
-    const grid = $('grid');
-    grid.innerHTML = '';
-
-    $('mineBadge').textContent = mine.length;
-    $('mineEmpty').classList.toggle('hidden', mine.length > 0);
-    $('selAllBtn').classList.toggle('hidden', mine.length === 0);
-
-    mine.forEach(f => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'ph' + (selected.has(f.file) ? ' sel' : '');
-      b.innerHTML = '<img loading="lazy" alt=""><span class="tick"></span>';
-      b.querySelector('img').src = thumb(f.name, 320);
-      b.addEventListener('click', () => {
-        if(selected.has(f.file)) selected.delete(f.file); else selected.add(f.file);
-        b.classList.toggle('sel', selected.has(f.file));
-        updateDelBar();
-      });
-      grid.appendChild(b);
-    });
-
-    updateDelBar();
-  }
-
-  function updateDelBar(){
-    const onMine = !$('tab-mine').classList.contains('hidden');
-    const n = selected.size;
-
-    $('delBar').classList.toggle('hidden', !onMine || n === 0);
-    $('delBtn').textContent = '🗑 Elimina ' + (n === 1 ? '1 foto' : n + ' foto');
-    $('selAllBtn').textContent = (n && n === mine.length) ? 'Deseleziona' : 'Seleziona tutte';
-  }
-
-  $('selAllBtn').addEventListener('click', () => {
-    if(selected.size === mine.length) selected.clear();
-    else mine.forEach(f => selected.add(f.file));
-    renderMine();
-  });
-
-  function ask(text){
-    return new Promise(resolve => {
-      $('modalText').textContent = text;
-      $('modal').classList.remove('hidden');
-
-      const done = v => {
-        $('modal').classList.add('hidden');
-        $('modalYes').onclick = $('modalNo').onclick = null;
-        resolve(v);
+        im.onerror = tryNext;
+        im.src = url;
       };
 
-      $('modalYes').onclick = () => done(true);
-      $('modalNo').onclick = () => done(false);
+      tryNext();
     });
   }
 
-  $('delBtn').addEventListener('click', async () => {
-    const n = selected.size;
-    if(!n) return;
+  async function preloadItem(item){
+    if(item.type === 'text') return;
 
-    if(!await ask('Eliminare ' + (n === 1 ? 'questa foto' : 'queste ' + n + ' foto') + '? Spariscono anche dallo slideshow.')) return;
+    const ok = await loadItemOnce(item);
 
-    const btn = $('delBtn');
-    btn.disabled = true;
-    btn.textContent = 'Elimino…';
+    if(!ok){
+      item.orientation = 'landscape';
+      item.aspect = 3 / 2;
+    }
+  }
 
-    const fd = new FormData();
-    fd.append('a', 'delete');
-    fd.append('u', code);
-    selected.forEach(f => fd.append('f[]', f));
+  // se il nome file inizia con "_" quel nome diventa la caption della foto
+  // es. "_Terrazza-con-vista-mare.jpg" -> "Terrazza con vista mare"
+  function parseCaption(name){
+    if(!name.startsWith('_')) return null;
+
+    const base = name.replace(/\.[^/.]+$/, '');
+    const raw = base.slice(1).replace(/[_-]+/g, ' ').trim();
+
+    if(!raw) return null;
+
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
+  // ordine scelto dal pannello di gestione (stesso file che scrive delete_amalfi.php):
+  // puo' contenere anche diapositive di solo testo ({type:'text', text:'...'}),
+  // se non esiste ancora nessuno ha mai riordinato le foto, si usa l'ordine naturale
+  // l'API di GitHub manda le sue risposte con una scadenza di circa un minuto,
+  // e il browser se le tiene: senza questo, uno slideshow avviato subito dopo
+  // aver salvato nel pannello leggerebbe l'ordine VECCHIO - durate e musica
+  // appena decise comprese, che quindi sembrerebbero ignorate.
+  // Il parametro non significa niente per GitHub, serve solo a rendere
+  // l'indirizzo diverso da quello gia' in cache
+  function fresh(url){
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'cb=' + Date.now();
+  }
+
+  async function fetchOrder(){
+    const res = await fetch(
+      fresh('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/' + FOLDER + '/_order.json?ref=' + BRANCH),
+      { cache: 'no-store' }
+    );
+
+    if(!res.ok) return [];
 
     try{
-      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
-      const j = await r.json();
-
-      if(!j.success){
-        $('mineMsg').className = 'msg bad';
-        $('mineMsg').textContent = (j.failed || []).length + ' foto non eliminate: riprova.';
-      }
+      const info = await res.json();
+      const json = atob(info.content.replace(/\n/g, ''));
+      const arr = JSON.parse(json);
+      return Array.isArray(arr) ? arr : [];
     }catch(e){
-      $('mineMsg').className = 'msg bad';
-      $('mineMsg').textContent = 'Rete assente: riprova.';
+      return [];
+    }
+  }
+
+  // elenco foto + ordine chiesti al server (list.php), che li legge con il
+  // token. Dal browser, senza token, l'API di GitHub concede 60 richieste
+  // all'ora PER INDIRIZZO IP, condivise con tutti quelli sulla stessa rete:
+  // pochi riavvii della proiezione e la sera dell'evento non parte piu' niente.
+  // Se list.php non c'e' (player aperto senza il sito raggiungibile) si torna
+  // all'API diretta, come prima
+  async function fetchFromServer(){
+    for(const base of [LIVE_HOST]){
+      try{
+        const res = await fetch(fresh(base + 'list.php' + (USER_Q ? '?' + USER_Q : '')), { cache: 'no-store' });
+
+        if(!res.ok) continue;
+
+        const data = await res.json();
+
+        if(data && Array.isArray(data.files)){
+          return { files: data.files, order: Array.isArray(data.order) ? data.order : [] };
+        }
+      }catch(e){
+        // origine sbagliata o sito irraggiungibile: si prova la successiva
+      }
     }
 
-    btn.disabled = false;
-    await loadMine(true);
-    loadShowCount();
+    return null;
+  }
+
+  async function fetchImages(){
+    let byName = {};
+    let orderEntries = [];
+
+    const fromServer = await fetchFromServer();
+
+    if(fromServer){
+      fromServer.files.forEach(f => { byName[f.name] = f; });
+      orderEntries = fromServer.order;
+    }else{
+      const [filesRes, order] = await Promise.all([
+        fetch(
+          fresh('https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/' + FOLDER + '?ref=' + BRANCH),
+          { cache: 'no-store' }
+        ),
+        fetchOrder()
+      ]);
+
+      if(!filesRes.ok){
+        throw new Error('Impossibile leggere la cartella immagini dal repository');
+      }
+
+      const data = await filesRes.json();
+
+      data
+        .filter(f => f.type === 'file' && /\.(jpe?g|png|webp|gif)$/i.test(f.name))
+        .forEach(f => { byName[f.name] = f; });
+
+      orderEntries = order;
+    }
+
+    // prima gli elementi nell'ordine salvato (foto o diapositive di testo),
+    // poi le foto mai ordinate (in coda, per nome).
+    // la didascalia vive nell'ordine salvato ({type:'photo', name, caption});
+    // parseCaption(nome) resta solo come fallback per le foto rinominate con
+    // il vecchio metodo (prefisso "_"), prima che esistessero le didascalie in _order.json
+    const playlist = [];
+    const used = new Set();
+
+    orderEntries.forEach(entry => {
+      // la voce 'meta' non e' una diapositiva: porta le impostazioni generali
+      // (per lo slideshow, la durata standard) e non finisce in playlist
+      if(entry && typeof entry === 'object' && entry.type === 'meta'){
+        const sec = Number(entry.defaultDuration);
+        if(sec > 0) defaultHoldMs = sec * 1000;
+        return;
+      }
+      if(entry && typeof entry === 'object' && entry.type === 'text'){
+        // diapositiva messa da parte nel pannello: non va in scena
+        if(entry.off) return;
+
+        playlist.push({ type: 'text', text: entry.text || '', duration: entry.duration, music: entry.music, bg: entry.bg, fx: entry.fx });
+        return;
+      }
+      if(entry && typeof entry === 'object' && entry.type === 'photo' && byName[entry.name]){
+        // la foto esclusa resta sul repository e nell'ordine, ma qui la salto.
+        // Va comunque segnata come "usata", altrimenti finirebbe in coda
+        // insieme alle foto mai ordinate
+        used.add(entry.name);
+
+        if(entry.off) return;
+
+        // inOrdine: questa foto il pannello la conosce gia'. Le regole del
+        // caricamento in diretta non devono piu' toccarla - nemmeno i campi
+        // lasciati vuoti, perche' "vuoto" li' vuol dire "Automatica scelta da
+        // una persona", non "non si sa"
+        playlist.push({ type: 'photo', name: entry.name, urls: photoUrls(entry.name), url: photoUrls(entry.name)[0], caption: entry.caption || null, duration: entry.duration, music: entry.music, fit: entry.fit, fx: entry.fx, inOrdine: true });
+        return;
+      }
+      if(typeof entry === 'string' && byName[entry]){
+        playlist.push({ type: 'photo', name: entry, urls: photoUrls(entry), url: photoUrls(entry)[0], caption: parseCaption(byName[entry].name), inOrdine: true });
+        used.add(entry);
+      }
+    });
+
+    Object.keys(byName).forEach(name => {
+      if(!used.has(name)){
+        playlist.push({ type: 'photo', name: name, urls: photoUrls(name), url: photoUrls(name)[0], caption: parseCaption(byName[name].name) });
+      }
+    });
+
+    playlist.forEach(item => { if(item.name) knownNames.add(item.name); });
+
+    return playlist;
+  }
+
+  // --- Libreria di effetti 3D casuali ---------------------------------
+
+  function cubeEffect(){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return {
+      inKF:[
+        { transform:'rotateY(' + (-dir*90) + 'deg) translateZ(-700px)', opacity:0 },
+        { transform:'rotateY(0deg) translateZ(0px)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'rotateY(0deg) translateZ(0px)', opacity:1 },
+        { transform:'rotateY(' + (dir*90) + 'deg) translateZ(-700px)', opacity:0 }
+      ]
+    };
+  }
+
+  function flipEffect(){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return {
+      inKF:[
+        { transform:'rotateX(' + (-dir*100) + 'deg) translateZ(-500px)', opacity:0 },
+        { transform:'rotateX(0deg) translateZ(0px)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'rotateX(0deg) translateZ(0px)', opacity:1 },
+        { transform:'rotateX(' + (dir*100) + 'deg) translateZ(-500px)', opacity:0 }
+      ]
+    };
+  }
+
+  function zoomBlastEffect(){
+    return {
+      inKF:[
+        { transform:'scale(0.25) translateZ(-1400px) rotateZ(8deg)', opacity:0 },
+        { transform:'scale(1) translateZ(0px) rotateZ(0deg)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'scale(1) translateZ(0px) rotateZ(0deg)', opacity:1 },
+        { transform:'scale(1.5) translateZ(500px) rotateZ(-6deg)', opacity:0 }
+      ]
+    };
+  }
+
+  function swirlEffect(){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return {
+      inKF:[
+        { transform:'rotateZ(' + (dir*160) + 'deg) scale(0.2)', opacity:0 },
+        { transform:'rotateZ(0deg) scale(1)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'rotateZ(0deg) scale(1)', opacity:1 },
+        { transform:'rotateZ(' + (-dir*160) + 'deg) scale(0.2)', opacity:0 }
+      ]
+    };
+  }
+
+  function tiltSlideEffect(){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return {
+      inKF:[
+        { transform:'translateX(' + (dir*100) + '%) rotateY(' + (-dir*50) + 'deg)', opacity:0 },
+        { transform:'translateX(0%) rotateY(0deg)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'translateX(0%) rotateY(0deg)', opacity:1 },
+        { transform:'translateX(' + (-dir*100) + '%) rotateY(' + (dir*50) + 'deg)', opacity:0 }
+      ]
+    };
+  }
+
+  function dropEffect(){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    return {
+      inKF:[
+        { transform:'translateY(' + (dir*80) + '%) rotateX(' + (-dir*70) + 'deg)', opacity:0 },
+        { transform:'translateY(0%) rotateX(0deg)', opacity:1 }
+      ],
+      outKF:[
+        { transform:'translateY(0%) rotateX(0deg)', opacity:1 },
+        { transform:'translateY(' + (-dir*80) + '%) rotateX(' + (dir*70) + 'deg)', opacity:0 }
+      ]
+    };
+  }
+
+  const EFFECTS = [cubeEffect, flipEffect, zoomBlastEffect, swirlEffect, tiltSlideEffect, dropEffect];
+
+  function pickEffect(){
+    return EFFECTS[Math.floor(Math.random() * EFFECTS.length)]();
+  }
+
+  // usato al posto delle transizioni 3D quando le due foto affiancate hanno
+  // gia' una loro animazione di entrata dedicata: la diapositiva intera si
+  // limita a una dissolvenza semplice, senza sovrapporsi al movimento dei pannelli
+  const PLAIN_FADE = {
+    inKF:  [{ opacity:0 }, { opacity:1 }],
+    outKF: [{ opacity:1 }, { opacity:0 }]
+  };
+
+  // targets: array di { el, mode } dove mode e' 'cover' o 'backdrop'
+  // 'backdrop' (foto sfocate dietro) puo' zoomare di piu' tanto e' fuori fuoco;
+  // 'cover' (pieno schermo nitido) resta piu' contenuto per non tagliare troppo il soggetto
+  function runKenBurns(targets, durationMs){
+    targets.forEach(t => {
+      const isBackdrop = t.mode === 'backdrop';
+      const scale = isBackdrop
+        ? 1.15 + Math.random() * 0.22
+        : 1.03 + Math.random() * 0.07;
+      const maxShift = isBackdrop ? 6 : 2.2;
+      const tx = (Math.random() * maxShift * 2 - maxShift).toFixed(2);
+      const ty = (Math.random() * maxShift * 2 - maxShift).toFixed(2);
+
+      t.el.animate(
+        [
+          { transform:'scale(1) translate(0%, 0%)' },
+          { transform:'scale(' + scale + ') translate(' + tx + '%, ' + ty + '%)' }
+        ],
+        { duration: durationMs, easing:'linear', fill:'forwards' }
+      );
+    });
+  }
+
+  // oscillazione lenta e continua sull'asse X per la foto con bordo bianco
+  // (layout a foto singola): non un giro completo (si vedrebbe di taglio/al
+  // contrario a meta' rotazione, essendo un'immagine piatta), ma un dondolio
+  // avanti e indietro che dura finche' non arriva la prossima foto
+  function swayPhoto3D(el){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const angle = 5 + Math.random() * 3;
+    const halfDuration = 8000 + Math.random() * 3000;
+
+    el.animate(
+      [
+        { transform: 'perspective(1400px) rotateX(' + (-dir * angle) + 'deg)' },
+        { transform: 'perspective(1400px) rotateX(' + (dir * angle) + 'deg)' }
+      ],
+      { duration: halfDuration, direction:'alternate', iterations:Infinity, easing:'ease-in-out' }
+    );
+  }
+
+  // --- Costruzione dei layout (choreografia) -----------------------------
+
+  function makeImgDiv(className, url){
+    const div = document.createElement('div');
+    div.className = className;
+    div.style.backgroundImage = 'url("' + url + '")';
+    return div;
+  }
+
+  // fa aderire il riquadro bianco alla foto reale: calcola larghezza e
+  // altezza esatte in pixel (il "letterbox fit" classico) cosi' il bordo
+  // abbraccia sempre l'immagine, qualunque sia la sua proporzione.
+  // Niente CSS aspect-ratio/percentuali: su un div vuoto senza contenuto
+  // proprio (solo uno sfondo) si sono rivelate inaffidabili
+  function sizePhotoBox(el, img, maxW, maxH){
+    const aspect = img.aspect || 1;
+
+    let w = maxH * aspect;
+    let h = maxH;
+
+    if(w > maxW){
+      w = maxW;
+      h = maxW / aspect;
+    }
+
+    el.style.width = Math.round(w) + 'px';
+    el.style.height = Math.round(h) + 'px';
+  }
+
+  // crea la caption animata (fade + slide up, e scorrimento se il testo e' lungo)
+  function applyCaption(container, caption, extraClass){
+    if(!caption) return null;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'caption' + (extraClass ? ' ' + extraClass : '');
+
+    const inner = document.createElement('div');
+    inner.className = 'caption-inner';
+
+    const text = document.createElement('span');
+    text.className = 'caption-text';
+    text.textContent = caption;
+
+    inner.appendChild(text);
+    wrap.appendChild(inner);
+    container.appendChild(wrap);
+
+    return { wrap, inner, text };
+  }
+
+  function buildCover(layer, img){
+    const el = makeImgDiv('cover-img', img.url);
+    layer.appendChild(el);
+
+    const cap = applyCaption(layer, img.caption, 'caption--photo');
+    return { kenburns:[{ el, mode:'cover' }], captions: cap ? [cap] : [] };
+  }
+
+  function buildContain(layer, img){
+    const wrap = document.createElement('div');
+    wrap.className = 'contain-wrap';
+
+    const backdrop = makeImgDiv('backdrop', img.url);
+    const frame = document.createElement('div');
+    frame.className = 'frame';
+
+    const photo = makeImgDiv('photo', img.url);
+    // .frame ha inset:5% -> 90% dello schermo disponibile
+    sizePhotoBox(photo, img, window.innerWidth * 0.90, window.innerHeight * 0.90);
+
+    // il dondolio 3D e' solo per le verticali (le rare orizzontali che finiscono
+    // in questo layout restano ferme)
+    if(img.orientation === 'portrait'){
+      swayPhoto3D(photo);
+    }
+
+    frame.appendChild(photo);
+
+    wrap.appendChild(backdrop);
+    wrap.appendChild(frame);
+    layer.appendChild(wrap);
+
+    const cap = applyCaption(wrap, img.caption, 'caption--photo');
+    return { kenburns:[{ el: backdrop, mode:'backdrop' }], captions: cap ? [cap] : [] };
+  }
+
+  // --- Entrate della coppia ---------------------------------------------
+
+  // Le due stampe possono arrivare in scena in modi diversi, sorteggiati a
+  // ogni diapositiva di coppia. Due vincoli da non violare mai:
+  //
+  // 1. la durata complessiva e' SEMPRE DUO_ENTER_MS, ritardi compresi (una
+  //    variante che fa partire la seconda stampa in ritardo accorcia la
+  //    propria animazione della stessa quantita'). Le didascalie sono state
+  //    sincronizzate a mano con la musica: cambiare i tempi qui vorrebbe dire
+  //    rifare quel lavoro.
+  // 2. tutte finiscono nella stessa posizione di riposo (le due stampe
+  //    leggermente inclinate verso l'esterno): cambia il viaggio, non il
+  //    punto d'arrivo.
+  const DUO_ENTER_MS = 1100;
+
+  function duoRestTransform(side){
+    return 'translate(0, 0) rotate(' + (side === 'left' ? -2.5 : 2.5) + 'deg) scale(1)';
+  }
+
+  const DUO_ENTRANCES = [
+
+    // dai due lati opposti, come una carta girata (l'entrata storica)
+    function lati(side){
+      return {
+        from: 'translate(' + (side === 'left' ? -70 : 70) + 'vw, 0) rotate(' +
+          (side === 'left' ? -18 : 18) + 'deg) scale(1)'
+      };
+    },
+
+    // dal fondo verso di noi: le due stampe crescono fino al loro posto
+    function avvicinamento(side){
+      return {
+        from: 'translate(0, 0) rotate(' + (side === 'left' ? -7 : 7) + 'deg) scale(.55)'
+      };
+    },
+
+    // una scende dall'alto, l'altra sale dal basso
+    function altoBasso(side){
+      return {
+        from: 'translate(0, ' + (side === 'left' ? -80 : 80) + 'vh) rotate(' +
+          (side === 'left' ? 9 : -9) + 'deg) scale(1)'
+      };
+    },
+
+    // partono sovrapposte al centro e si aprono come un libro
+    function apertura(side){
+      return {
+        from: 'translate(' + (side === 'left' ? 27 : -27) + 'vw, 0) rotate(' +
+          (side === 'left' ? 13 : -13) + 'deg) scale(.78)'
+      };
+    },
+
+    // salgono tutte e due dal basso, la seconda un attimo dopo la prima:
+    // il ritardo e' compensato dalla durata piu' corta, il totale non cambia
+    function unaDopoLaltra(side){
+      return {
+        from: 'translate(0, 62vh) rotate(' + (side === 'left' ? -6 : 6) + 'deg) scale(.92)',
+        delay: side === 'left' ? 0 : 170,
+        easing: 'cubic-bezier(.16,.9,.3,1)'
+      };
+    }
+  ];
+
+  function buildDuo(layer, imgA, imgB){
+    // le didascalie delle due foto diventano una sola scritta sotto la coppia:
+    // va saputo prima, perche' cambia lo spazio che resta alle foto
+    const testi = [imgA, imgB]
+      .map(img => (img.caption || '').trim())
+      .filter(t => t !== '');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'duo-wrap' + (testi.length ? ' duo-wrap--cap' : '');
+
+    // sfondo unico condiviso da entrambe (non piu' uno sfocato a testa):
+    // una delle due foto, scelta a caso, molto sfocata e attenuata
+    const sharedPhoto = Math.random() < 0.5 ? imgA : imgB;
+    const sharedBackdrop = makeImgDiv('sharedBackdrop', sharedPhoto.url);
+    wrap.appendChild(sharedBackdrop);
+
+    const captions = [];
+    const panels = [];
+
+    // spazio massimo disponibile per ciascun pannello: .duo-wrap ha
+    // padding:6vw 5vw e gap:3vw tra i due pannelli
+    const paddingX = window.innerWidth * 0.05;
+    const gap = window.innerWidth * 0.03;
+    const maxPanelW = (window.innerWidth - paddingX * 2 - gap) / 2;
+    const maxPanelH = window.innerHeight * (testi.length ? 0.62 : 0.82);
+
+    [imgA, imgB].forEach((img, i) => {
+      const panel = document.createElement('div');
+      panel.className = 'duo-panel';
+
+      const photo = makeImgDiv('photo', img.url);
+      sizePhotoBox(photo, img, maxPanelW, maxPanelH);
+      panel.appendChild(photo);
+
+      wrap.appendChild(panel);
+
+      panels.push({ el: panel, side: i === 0 ? 'left' : 'right' });
+    });
+
+    layer.appendChild(wrap);
+
+    // una didascalia sola per tutta la diapositiva, non una targhetta per
+    // foto: se entrambe ne hanno una si uniscono, separate da un punto
+    const cap = applyCaption(wrap, testi.join(' · '), 'caption--photo caption--pair');
+    if(cap) captions.push(cap);
+
+    // entrata sorteggiata fra quelle di DUO_ENTRANCES: cambia il modo in cui
+    // le due stampe arrivano, non il tempo che ci mettono
+    const entrata = DUO_ENTRANCES[Math.floor(Math.random() * DUO_ENTRANCES.length)];
+
+    panels.forEach(p => {
+      const mossa = entrata(p.side);
+      const ritardo = mossa.delay || 0;
+
+      p.el.animate(
+        [
+          { transform: mossa.from, opacity: 0 },
+          { transform: duoRestTransform(p.side), opacity: 1 }
+        ],
+        {
+          duration: DUO_ENTER_MS - ritardo,
+          delay: ritardo,
+          easing: mossa.easing || 'cubic-bezier(.2,.8,.2,1)',
+          // 'both' e non 'forwards': con un ritardo, senza il riempimento
+          // all'indietro il pannello resterebbe visibile al suo posto per
+          // quei millisecondi e poi salterebbe indietro al punto di partenza
+          fill: 'both'
+        }
+      );
+    });
+
+    return {
+      kenburns: [{ el: sharedBackdrop, mode:'backdrop' }],
+      captions,
+      skipEffect: true
+    };
+  }
+
+  // diapositiva di solo testo ("Qui eravamo in assemblea"): sfondo chiaro con
+  // una piccola variazione casuale di tinta, testo grande al centro, stesso
+  // sistema di comparsa (fade+slide up) delle caption sulle foto
+  const TEXT_VARIANTS = ['a', 'b', 'c'];
+
+  // sfondi scegliibili dal pannello: la chiave e' quella salvata in
+  // _order.json ({type:'text', bg:'notte'}), il valore dice solo se il fondo
+  // e' scuro (allora il testo va schiarito). Il colore vero sta nel CSS
+  const TEXT_BG = {
+    bianco: false, crema: false, perla: false, sabbia: false, salvia: false,
+    notte: true, nero: true, bosco: true, bordeaux: true, tramonto: true, mare: true
+  };
+
+  function buildTextSlide(layer, item){
+    // sfondo scelto nel pannello; se non c'e' (o non lo conosco) resta il
+    // comportamento di sempre: una delle tre tinte chiare, a caso
+    const chosen = Object.prototype.hasOwnProperty.call(TEXT_BG, item.bg) ? item.bg : null;
+    const variant = chosen || TEXT_VARIANTS[Math.floor(Math.random() * TEXT_VARIANTS.length)];
+
+    const bg = document.createElement('div');
+    bg.className = 'textSlideBg textSlideBg--' + variant;
+    layer.appendChild(bg);
+
+    if(chosen && TEXT_BG[chosen]) layer.classList.add('slide--darkText');
+
+    const cap = applyCaption(layer, item.text, 'caption--title');
+    return { kenburns: [], captions: cap ? [cap] : [] };
+  }
+
+  // inquadratura scelta nel pannello per questa foto (campo 'fit' in
+  // _order.json): 'cover' pieno schermo, 'contain' foto intera, 'duo' in
+  // coppia con la successiva. null = decide il caso, come e' sempre stato
+  const FIT_KEYS = ['cover', 'contain', 'duo'];
+
+  // 'none' = passaggio netto, deciso nel pannello: la diapositiva compare di
+  // colpo, senza dissolvenza ne' effetti 3D. Assente = effetto a sorte
+  function fxOf(item){
+    return (item && item.fx === 'none') ? 'none' : null;
+  }
+
+  function fitOf(item){
+    if(!item || item.type !== 'photo') return null;
+
+    return FIT_KEYS.indexOf(item.fit) === -1 ? null : item.fit;
+  }
+
+  // traduce la scelta in un layout davvero applicabile: la coppia ha bisogno
+  // di una seconda foto disponibile, e senza quella si ripiega sul modo che
+  // rispetta di piu' l'intenzione (foto intera, cosi' non si taglia niente)
+  function chosenLayout(scelta, item, nextItem, nextLibera){
+    if(scelta !== 'duo') return scelta;
+
+    if(images.length >= 2 && nextItem && nextItem.type === 'photo' && nextLibera){
+      return 'duo';
+    }
+
+    return 'contain';
+  }
+
+  // le foto verticali non vanno mai a pieno schermo (si taglierebbero troppo):
+  // foto intera con sfondo sfocato, oppure in coppia con un'altra verticale
+  function pickLayout(orientation, duoEligible){
+    const r = Math.random();
+
+    if(orientation === 'portrait'){
+      if(duoEligible && r < 0.35) return 'duo';
+      return 'contain';
+    }
+
+    if(duoEligible && r < 0.15) return 'duo';   // 15% due foto insieme
+    if(r < 0.30) return 'contain';               // 15% foto intera + sfondo sfocato
+    return 'cover';                               // 70% pieno schermo (ideale per le orizzontali)
+  }
+
+  // Numero della diapositiva in corso, acceso con ?vs=1 nell'indirizzo
+  // (anche aprendo il file in locale: file:///.../slideshow.html?vs=1).
+  //
+  // E' il numero della PLAYLIST, lo stesso che vuole il campo "Parti dalla
+  // diapositiva N" della schermata iniziale: le diapositive escluse nel
+  // pannello non ci sono, quindi non coincide col numero della card se ce ne
+  // sono di spente prima. Una coppia occupa due posti e li mostra entrambi.
+  const SHOW_SLIDE_NO = new URLSearchParams(location.search).get('vs') === '1';
+
+  const slideTag = document.getElementById('slideTag');
+
+  function updateSlideTag(built){
+    if(!SHOW_SLIDE_NO || !built) return;
+
+    const primo = built.slideNo;
+    const ultimo = primo + (built.slideSpan || 1) - 1;
+
+    slideTag.innerHTML = (ultimo > primo ? primo + '-' + ultimo : primo) +
+      '<span class="tot"> / ' + images.length + '</span>';
+
+    slideTag.style.display = 'block';
+  }
+
+  // il numero va attaccato a quello che fillLayer ha davvero consumato: una
+  // coppia ne mangia due, e con le foto che arrivano in diretta l'elenco si
+  // allunga mentre si proietta
+  function fillLayer(layer){
+    const primo = (nextIndex >= images.length) ? images.length - 1 : nextIndex;
+
+    const built = fillLayerBuild(layer);
+
+    built.slideNo = primo + 1;
+    built.slideSpan = Math.max(1, nextIndex - primo);
+
+    return built;
+  }
+
+  function fillLayerBuild(layer){
+    layer.innerHTML = '';
+
+    // i due layer si riusano a ogni giro: senza questo, una diapositiva di
+    // testo su fondo scuro lascerebbe il testo chiaro a quella dopo
+    layer.classList.remove('slide--darkText');
+
+    // nextIndex e' un indice VERO, non un contatore che cresce all'infinito:
+    // con un "nextIndex % images.length" ogni foto aggiunta durante la
+    // proiezione (quelle di foto.html) rimapperebbe tutti gli indici e lo
+    // slideshow salterebbe indietro a caso.
+    // Alla fine dell'elenco non si ricomincia: se ne accorge nextSlide e
+    // riporta alla schermata iniziale. Qui resta solo una rete di sicurezza
+    if(nextIndex >= images.length) nextIndex = images.length - 1;
+
+    const item = images[nextIndex];
+
+    if(item.type === 'text'){
+      nextIndex += 1;
+      const textBuilt = buildTextSlide(layer, item);
+      textBuilt.holdMs = holdOf(item);
+      textBuilt.music = musicOf(item);
+      textBuilt.fx = fxOf(item);
+      return textBuilt;
+    }
+
+    // niente giro: dopo l'ultima non c'e' una compagna
+    const nextItem = (nextIndex + 1 < images.length) ? images[nextIndex + 1] : null;
+
+    // inquadratura decisa nel pannello (campo 'fit'), se c'e'
+    const scelta = fitOf(item);
+
+    // la foto che verrebbe assorbita nella coppia non deve avere una sua
+    // idea diversa: se l'ha, la coppia non si forma e ognuna va per conto suo
+    const nextLibera = nextItem && nextItem.type === 'photo'
+      && (fitOf(nextItem) === null || fitOf(nextItem) === 'duo');
+
+    // il layout a due foto affianca solo scatti con lo stesso orientamento
+    // (altrimenti il bordo bianco non aderisce bene a entrambe); quando la
+    // coppia e' chiesta dal pannello questo vincolo non si applica, l'ha
+    // decisa una persona guardando le due foto
+    const duoEligible = images.length >= 2
+      && nextItem
+      && nextItem.type === 'photo'
+      && nextLibera
+      && nextItem.orientation === item.orientation;
+
+    const layout = scelta
+      ? chosenLayout(scelta, item, nextItem, nextLibera)
+      : pickLayout(item.orientation, duoEligible);
+
+    if(layout === 'duo'){
+      nextIndex += 2;
+      const duoBuilt = buildDuo(layer, item, nextItem);
+      // due foto in una sola diapositiva: resta in scena quanto la piu' "lenta"
+      // delle due, altrimenti una delle due durate scelte non verrebbe rispettata
+      duoBuilt.holdMs = Math.max(holdOf(item), holdOf(nextItem));
+      // entrano in scena insieme: comanda la prima delle due che ha una traccia
+      duoBuilt.music = musicOf(item) || musicOf(nextItem);
+      // entrano insieme: basta che una delle due chieda il passaggio netto
+      duoBuilt.fx = fxOf(item) || fxOf(nextItem);
+      return duoBuilt;
+    }
+
+    nextIndex += 1;
+    const built = layout === 'contain' ? buildContain(layer, item) : buildCover(layer, item);
+    built.holdMs = holdOf(item);
+    built.music = musicOf(item);
+    built.fx = fxOf(item);
+    return built;
+  }
+
+  // --- Stili casuali per la comparsa delle caption sulle foto -----------
+
+  // stile classico: fade + salita dal basso, e se il testo non ci sta in una
+  // riga lo fa scorrere avanti e indietro
+  function captionFadeSlideUp(c){
+    c.wrap.animate(
+      [
+        { opacity:0, transform:'translateY(18px)' },
+        { opacity:1, transform:'translateY(0)' }
+      ],
+      { duration:700, easing:'ease-out', fill:'forwards' }
+    );
+
+    requestAnimationFrame(() => {
+      const overflow = c.text.scrollWidth - c.inner.clientWidth;
+
+      if(overflow > 4){
+        const distance = overflow + 16;
+        const duration = Math.max(4000, distance * 45);
+
+        c.text.animate(
+          [
+            { transform:'translateX(0px)' },
+            { transform:'translateX(' + (-distance) + 'px)' }
+          ],
+          { duration, direction:'alternate', iterations:Infinity, easing:'ease-in-out', delay:1300, fill:'forwards' }
+        );
+      }
+    });
+  }
+
+  // scritta che attraversa lo schermo da un lato all'altro (in stile "notizie
+  // che scorrono"), con dissolvenza sui due bordi; direzione casuale
+  function captionMarquee(c, totalMs){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const from = -dir * 60;
+    const to = dir * 60;
+
+    c.wrap.animate(
+      [
+        { opacity:0, transform:'translateX(' + from + 'vw)' },
+        { opacity:1, offset:0.15, transform:'translateX(' + (from * 0.6) + 'vw)' },
+        { opacity:1, offset:0.85, transform:'translateX(' + (to * 0.6) + 'vw)' },
+        { opacity:0, transform:'translateX(' + to + 'vw)' }
+      ],
+      { duration: totalMs, easing:'linear', fill:'forwards' }
+    );
+  }
+
+  // la scritta (solo lei, non la foto) entra ruotando in 3D e sparisce allo
+  // stesso modo poco prima che la diapositiva cambi
+  function captionFade3D(c, totalMs){
+    const dir = Math.random() < 0.5 ? 1 : -1;
+
+    c.wrap.animate(
+      [
+        { opacity:0, transform:'perspective(900px) rotateX(' + (dir * 75) + 'deg)' },
+        { opacity:1, transform:'perspective(900px) rotateX(0deg)' }
+      ],
+      { duration:750, easing:'ease-out', fill:'forwards' }
+    );
+
+    const exitDelay = Math.max(600, totalMs - 1400);
+
+    setTimeout(() => {
+      c.wrap.animate(
+        [
+          { opacity:1, transform:'perspective(900px) rotateX(0deg)' },
+          { opacity:0, transform:'perspective(900px) rotateX(' + (-dir * 75) + 'deg)' }
+        ],
+        { duration:700, easing:'ease-in', fill:'forwards' }
+      );
+    }, exitDelay);
+  }
+
+  // spezza la didascalia in lettere, raggruppate per parola: le lettere sono
+  // gli elementi che compaiono uno dopo l'altro, le parole servono solo a non
+  // far spezzare le parole a fine riga
+  function splitInLetters(textEl){
+    const parole = textEl.textContent.split(/(\s+)/);
+
+    textEl.textContent = '';
+
+    const lettere = [];
+
+    parole.forEach(pezzo => {
+      if(pezzo === '') return;
+
+      // gli spazi restano spazi: se li facessi comparire uno a uno il testo
+      // "salterebbe" mentre le parole si allargano
+      if(/^\s+$/.test(pezzo)){
+        textEl.appendChild(document.createTextNode(pezzo));
+        return;
+      }
+
+      const parola = document.createElement('span');
+      parola.className = 'caption-word';
+
+      Array.from(pezzo).forEach(ch => {
+        const lettera = document.createElement('span');
+        lettera.className = 'caption-letter';
+        lettera.textContent = ch;
+        parola.appendChild(lettera);
+        lettere.push(lettera);
+      });
+
+      textEl.appendChild(parola);
+    });
+
+    return lettere;
+  }
+
+  // comparsa lettera per lettera, poi dissolvenza prima del cambio diapositiva.
+  //
+  // Il passo fra una lettera e l'altra non e' fisso: parte da 90 millesimi ma
+  // si accorcia quando le lettere sono tante o quando la diapositiva dura
+  // poco. Il tempo concesso all'intera scritta e' poco piu' della meta' della
+  // permanenza in scena (al massimo 2,6 secondi): oltre, si finirebbe a
+  // leggerla mentre gia' sta sfumando - e con la durata standard di 2 secondi
+  // per diapositiva un passo fisso non farebbe in tempo ad arrivare in fondo
+  function captionTypeIn(c, totalMs){
+    // il contenitore parte invisibile (lo dice il CSS, cosi' nessuna
+    // didascalia lampeggia prima della sua animazione): qui a comparire sono
+    // le lettere, quindi il contenitore va scoperto subito, altrimenti resta
+    // tutto nascosto
+    c.wrap.style.opacity = 1;
+    c.wrap.style.transform = 'none';
+
+    const lettere = splitInLetters(c.text);
+
+    const budget = Math.min(2600, Math.max(900, totalMs * 0.55));
+
+    const passo = lettere.length > 0
+      ? Math.min(90, budget / lettere.length)
+      : 0;
+
+    lettere.forEach((lettera, i) => {
+      lettera.animate(
+        [{ opacity:0 }, { opacity:1 }],
+        { duration:650, delay: i * passo, easing:'ease-out', fill:'backwards' }
+      );
+    });
+
+    const exitDelay = Math.max(800, totalMs - 1200);
+
+    setTimeout(() => {
+      c.wrap.animate(
+        [{ opacity:1 }, { opacity:0 }],
+        { duration:900, easing:'ease-in', fill:'forwards' }
+      );
+    }, exitDelay);
+  }
+
+  const CAPTION_STYLES = [captionFadeSlideUp, captionMarquee, captionFade3D];
+
+  // fa apparire le caption con uno stile scelto a caso ad ogni comparsa.
+  // le diapositive di titolo restano sempre sul fade+slide up (piu' adatto a
+  // un testo grande e centrato)
+  function revealCaptions(captionRefs, totalMs){
+    captionRefs.forEach(c => {
+      if(c.wrap.classList.contains('caption--title')){
+        captionFadeSlideUp(c);
+        return;
+      }
+
+      // la didascalia della foto singola ha un suo modo di comparire, sempre
+      // lo stesso: lettera per lettera. Restano al sorteggio solo le scritte
+      // piccole sotto le foto affiancate
+      if(c.wrap.classList.contains('caption--photo')){
+        captionTypeIn(c, totalMs);
+        return;
+      }
+
+      const style = CAPTION_STYLES[Math.floor(Math.random() * CAPTION_STYLES.length)];
+      style(c, totalMs);
+    });
+  }
+
+  // --- Musica -----------------------------------------------------------
+
+  // due lettori alternati: mentre uno sale l'altro scende, cosi' il passaggio
+  // fra due brani non ha ne' silenzio ne' sovrapposizione brusca
+  let musicCurrent = 0;      // indice in players[] di quello che sta suonando
+  let musicTrack = null;     // traccia in corso (nome file), null = silenzio
+
+  function musicOf(item){
+    if(!item) return null;
+
+    const value = item.music;
+
+    if(typeof value !== 'string' || value === '') return null;
+
+    return value;
+  }
+
+  // sfuma il volume di un lettore. Un solo fade per volta sullo stesso
+  // elemento: il secondo cancella il primo, altrimenti due sfumature
+  // sovrapposte si contendono lo stesso volume e il risultato salta
+  function fadeAudio(player, to, ms, onDone){
+    clearInterval(player.fadeTimer);
+
+    const from = player.volume;
+    const steps = Math.max(1, Math.round(ms / 50));
+    let step = 0;
+
+    player.fadeTimer = setInterval(() => {
+      step += 1;
+
+      const v = from + (to - from) * (step / steps);
+      player.volume = Math.min(1, Math.max(0, v));
+
+      if(step >= steps){
+        clearInterval(player.fadeTimer);
+        if(onDone) onDone();
+      }
+    }, 50);
+  }
+
+  function applyMusic(track){
+    // la diapositiva non dice niente sulla musica: continua quella in corso
+    if(track === null) return;
+
+    if(track === MUSIC_STOP){
+      if(musicTrack === null) return;
+
+      const playing = players[musicCurrent];
+      fadeAudio(playing, 0, MUSIC_FADE_MS, () => playing.pause());
+      musicTrack = null;
+      return;
+    }
+
+    if(track === musicTrack) return;
+
+    const outgoing = players[musicCurrent];
+    const incoming = players[1 - musicCurrent];
+
+    clearInterval(incoming.fadeTimer);
+
+    // da qui in poi questo lettore ha una traccia vera: lo sblocco iniziale
+    // non deve piu' metterlo in pausa quando la sua promise si risolve
+    incoming.unlocking = false;
+
+    incoming.src = MUSIC_BASE + encodeURIComponent(track);
+    incoming.volume = 0;
+    incoming.currentTime = 0;
+
+    // niente loop: quando la traccia finisce resta il silenzio, fino alla
+    // prossima diapositiva che ne apre un'altra
+    incoming.loop = false;
+
+    const started = incoming.play();
+
+    if(started && started.catch){
+      started.catch(() => showNotice('Non riesco a far partire la musica: ' + track));
+    }
+
+    fadeAudio(incoming, MUSIC_VOLUME, MUSIC_FADE_MS);
+
+    if(musicTrack !== null){
+      fadeAudio(outgoing, 0, MUSIC_FADE_MS, () => outgoing.pause());
+    }
+
+    musicCurrent = 1 - musicCurrent;
+    musicTrack = track;
+  }
+
+  // una traccia che non si carica (nome sbagliato, file cancellato dal server,
+  // rete giu') non deve passare inosservata: senza questo l'unico sintomo e'
+  // il silenzio, e a proiezione avviata non si capisce di chi sia la colpa
+  function watchPlayers(){
+    players.forEach(p => {
+      p.addEventListener('error', () => {
+        const name = decodeURIComponent((p.currentSrc || '').split('/').pop());
+
+        if(name) showNotice('Traccia non caricata: ' + name);
+      });
+    });
+  }
+
+  // i browser lasciano suonare l'audio solo dopo un'interazione dell'utente,
+  // e il "permesso" si prende sull'elemento: qui siamo dentro il click di
+  // avvio, quindi tocco entrambi i lettori una volta per sbloccarli.
+  //
+  // Lo sblocco pero' va fatto su una sorgente vera. La promise di play() su un
+  // <audio> SENZA src non viene rifiutata: resta sospesa finche' una sorgente
+  // non arriva, e si risolve proprio quando piu' tardi parte la prima traccia,
+  // eseguendo in quel momento il pause() che le stava dietro. La musica partiva
+  // e si fermava dopo un istante (visto in console: playing subito seguito da
+  // pause). Qui do quindi un frammento silenzioso, che si risolve subito, e
+  // metto in pausa solo se nel frattempo non e' arrivata una traccia vera
+  const SILENCE = 'data:audio/wav;base64,UklGRuwAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YcgAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+
+  function unlockPlayers(){
+    players.forEach(p => {
+      p.unlocking = true;
+      p.volume = 0;
+      p.src = SILENCE;
+
+      const done = () => {
+        if(p.unlocking){
+          p.pause();
+          p.unlocking = false;
+        }
+      };
+
+      const started = p.play();
+
+      if(started && started.then){
+        started.then(done).catch(() => { p.unlocking = false; });
+      }else{
+        done();
+      }
+    });
+  }
+
+  // --- Foto che arrivano a proiezione avviata ---------------------------
+
+  // nomi che live.php ha gia' annunciato ma la cui immagine non e' ancora
+  // scaricabile: la CDN di raw.githubusercontent puo' impiegare qualche
+  // secondo a servire un file appena committato
+  let retryQueue = [];
+
+  // avviso discreto in sovrimpressione: senza questo, se il canale live non
+  // funziona (endpoint irraggiungibile) lo slideshow prosegue identico e non
+  // si capisce che le foto appena caricate non arriveranno mai.
+  //
+  // In proiezione (e ancora di piu' in registrazione) lo schermo dev'essere
+  // pulito: nessuna scritta sopra le foto. Gli avvisi restano nel codice ma
+  // finiscono in console; per rivederli a schermo serve ?msg=1
+  // nell'indirizzo.
+  const NOTICES_ON_SCREEN = /(?:^|[?&])msg=1(?:&|$)/.test(location.search);
+
+  let noticeEl = null;
+
+  function showNotice(text){
+    console.log('[slideshow] ' + text);
+    if(!NOTICES_ON_SCREEN) return;
+
+    if(!noticeEl){
+      noticeEl = document.createElement('div');
+      noticeEl.style.cssText = 'position:fixed;left:22px;bottom:18px;z-index:6;' +
+        'color:rgba(255,255,255,.55);font-size:13px;letter-spacing:.03em;' +
+        'background:rgba(0,0,0,.45);padding:6px 12px;border-radius:8px;' +
+        'transition:opacity .6s;';
+      document.body.appendChild(noticeEl);
+    }
+
+    noticeEl.textContent = text;
+    noticeEl.style.opacity = 1;
+
+    clearTimeout(showNotice.timer);
+    showNotice.timer = setTimeout(() => { noticeEl.style.opacity = 0; }, 8000);
+  }
+
+  // da' a una foto gia' in playlist durata e inquadratura del caricamento
+  // live.
+  //
+  // Vale solo per le foto che il pannello non ha ancora in scaletta: appena
+  // una entra in _order.json comanda il pannello, punto. Il campo vuoto li'
+  // significa "Automatica", cioe' una scelta, e sovrascriverlo faceva danni
+  // veri - trovato il 21/08/2026: le foto messe "In coppia" restavano intere,
+  // perche' la compagna (inquadratura Automatica) veniva forzata a 'contain'
+  // e cosi' non era piu' libera di accoppiarsi.
+  function applyLiveStyle(it){
+    if(!it.live) return;
+
+    for(let i = 0; i < images.length; i++){
+      const item = images[i];
+
+      if(item.type !== 'photo' || item.name !== it.name) continue;
+
+      if(item.inOrdine) return;
+
+      if(item.fit === undefined || item.fit === null || item.fit === '') item.fit = liveFit;
+      if(!(Number(item.duration) > 0)) item.duration = liveDurationSec;
+
+      return;
+    }
+  }
+
+  async function adoptPhoto(name, uploader, attempt, isLive){
+    // il parametro serve solo a bucare la cache negativa della CDN quando il
+    // primo tentativo ha trovato la foto non ancora pubblicata
+    // (photoUrls lo attacca con & al proxy e con ? a raw)
+    const bust = attempt > 1 ? '&cb=' + Date.now() : '';
+
+    const item = {
+      type: 'photo',
+      name: name,
+      urls: photoUrls(name, bust),
+      // le foto caricate dal pubblico non hanno didascalia (upload_amalfibelvedere.php
+      // scrive caption vuota in _order.json): il nome di chi l'ha inviata resta nei
+      // metadati e nel pannello, non va sullo schermo
+      caption: null
+    };
+
+    // caricamento live: inquadratura e durata non si tirano a sorte come per
+    // le foto della scaletta, sono quelle fisse decise per la serata
+    if(isLive){
+      item.fit = liveFit;
+      item.duration = liveDurationSec;
+    }
+
+    // niente foto senza orientamento: fillLayer sceglie il layout in base a
+    // quello, un item non precaricato manderebbe in confusione anche il duo
+    const ok = await loadItemOnce(item);
+
+    if(!ok){
+      if(attempt < LIVE_FETCH_ATTEMPTS){
+        retryQueue.push({ name: name, uploader: uploader, attempt: attempt + 1, live: isLive });
+      }else{
+        showNotice('Una foto appena caricata non e\' ancora leggibile: ' + name);
+      }
+      return;
+    }
+
+    // sempre in coda, mai infilata prima: l'ordine deciso nel pannello va
+    // rispettato fino in fondo, la foto nuova aspetta il suo turno.
+    // Con nextIndex normalizzato in fillLayer, allungare l'array qui non
+    // disturba la diapositiva in corso
+    images.push(item);
+
+    showNotice('Nuova foto' + (uploader ? ' di ' + uploader : '') + ': in coda allo slideshow');
+  }
+
+  // indirizzi da provare per il registro live, nell'ordine: prima quello
+  // relativo (caso in cui l'HTML sia servito dallo stesso sito dei PHP),
+  // poi il sito noto. Il primo che risponde diventa quello definitivo
+  function liveUrlCandidates(){
+    const list = [];
+
+
+    const absolute = LIVE_HOST + 'live.php';
+    if(list.indexOf(absolute) === -1) list.push(absolute);
+
+    return list;
+  }
+
+  let liveUrls = null;      // candidati ancora da provare / quello che funziona
+  let liveWarned = false;
+
+  async function fetchLive(){
+    if(liveUrls === null) liveUrls = liveUrlCandidates();
+
+    for(let i = 0; i < liveUrls.length; i++){
+      try{
+        const res = await fetch(liveUrls[i] + '?' + (USER_Q ? USER_Q + '&' : '') + 'since=' + liveSince, { cache: 'no-store' });
+
+        if(!res.ok) continue;
+
+        const data = await res.json();
+
+        liveUrls = [liveUrls[i]];   // trovato: non provo piu' gli altri
+        liveWarned = false;
+
+        return data;
+      }catch(e){
+        // origine sbagliata, rete assente o endpoint non installato:
+        // provo il candidato successivo
+      }
+    }
+
+    if(!liveWarned){
+      liveWarned = true;
+      showNotice('Le foto caricate durante la serata non arrivano: ' + liveUrls.join(' / ') + ' non risponde');
+    }
+
+    // riprovo tutti i candidati al giro dopo (il sito puo' tornare su)
+    liveUrls = null;
+
+    return null;
+  }
+
+  async function pollLive(){
+    const pending = retryQueue;
+    retryQueue = [];
+
+    let items = [];
+
+    const data = await fetchLive();
+
+    if(data){
+      if(typeof data.now === 'number') liveSince = data.now;
+      if(Array.isArray(data.items)) items = data.items;
+
+      // durata e inquadratura delle foto live le decide il server: cosi' si
+      // possono cambiare senza rimettere in giro questo file
+      if(Number(data.liveDuration) > 0) liveDurationSec = Number(data.liveDuration);
+      if(FIT_KEYS.indexOf(data.liveFit) !== -1) liveFit = data.liveFit;
+    }
+
+    const jobs = pending.map(p => adoptPhoto(p.name, p.uploader, p.attempt, p.live));
+
+    items.forEach(it => {
+      if(!it || !it.name) return;
+
+      if(knownNames.has(it.name)){
+        // gia' in scaletta: succede quando la proiezione viene riavviata dopo
+        // che il pubblico ha gia' caricato (la foto e' nella cartella, quindi
+        // entra in playlist dal primo giro, e il registro la riannuncia col
+        // primo poll). Le regole del caricamento live valgono lo stesso
+        applyLiveStyle(it);
+        return;
+      }
+
+      knownNames.add(it.name);
+      jobs.push(adoptPhoto(it.name, it.uploader || '', 1, !!it.live));
+    });
+
+    await Promise.all(jobs);
+  }
+
+  // --- Immagini tenute pronte a schermo ---------------------------------
+
+  // Il precaricamento iniziale scarica tutte le foto, ma non basta: l'oggetto
+  // Image che le ha scaricate viene buttato via subito dopo, e quando la foto
+  // torna come background-image il browser deve rileggerla dalla cache e
+  // ridecodificarla. Sulle foto grandi quella decodifica non fa in tempo:
+  // il pannello della coppia e la cornice hanno il fondo bianco (serve per il
+  // bordo della "stampa"), quindi per un istante si vede il bianco e la foto
+  // compare dopo. Si nota di piu' quando arrivano foto nuove: ogni
+  // scaricamento spinge fuori dalla cache in memoria le immagini piu' vecchie.
+  //
+  // Rimedio: una finestra di diapositive tenute calde. Le prossime vengono
+  // decodificate in anticipo (img.decode()) e l'oggetto Image resta agganciato
+  // alla voce, cosi' il bitmap non viene buttato via; passate di scena si
+  // lascia la presa - con un centinaio di foto tenerle tutte decodificate
+  // sarebbe qualche centinaio di MB.
+  const WARM_AHEAD = 4;        // quante diapositive avanti tenere pronte
+  const WARM_BEHIND = 2;       // e quante indietro (quella in scena, e la sua compagna di coppia)
+  const WARM_WAIT_MS = 700;    // oltre questa attesa si va in scena lo stesso
+
+  function warmItem(item){
+    if(!item || item.type !== 'photo' || !item.url) return Promise.resolve();
+
+    // gia' calda per questo indirizzo: niente da rifare (l'indirizzo puo'
+    // cambiare, le foto arrivate in diretta hanno un parametro anti-cache)
+    if(item.warm && item.warm.src === item.url) return item.warm.ready;
+
+    const im = new Image();
+    im.src = item.url;
+
+    // decode() aspetta che l'immagine sia pronta *da dipingere*, non solo
+    // scaricata: e' la differenza fra il lampo bianco e la foto gia' li'
+    const ready = (typeof im.decode === 'function')
+      ? im.decode().catch(() => {})
+      : new Promise(resolve => { im.onload = resolve; im.onerror = resolve; });
+
+    item.warm = { el: im, src: item.url, ready: ready };
+
+    return ready;
+  }
+
+  function coolItem(item){
+    if(item) item.warm = null;
+  }
+
+  // scalda le prossime, lascia andare le altre
+  function warmWindow(from){
+    for(let i = 0; i < images.length; i++){
+      if(i >= from - WARM_BEHIND && i < from + WARM_AHEAD) warmItem(images[i]);
+      else coolItem(images[i]);
+    }
+  }
+
+  // aspetta che la diapositiva in arrivo sia davvero dipingibile. Scalda anche
+  // la successiva perche' potrebbe entrare in scena insieme (coppia): sono le
+  // due foto che fillLayer puo' mettere sullo stesso layer.
+  // L'attesa ha un tetto: una foto che non si decodifica non deve fermare la
+  // proiezione, al limite si rivede il lampo bianco di prima
+  function warmSlide(index){
+    const jobs = [warmItem(images[index])];
+
+    if(index + 1 < images.length) jobs.push(warmItem(images[index + 1]));
+
+    return Promise.race([
+      Promise.all(jobs),
+      new Promise(resolve => setTimeout(resolve, WARM_WAIT_MS))
+    ]);
+  }
+
+  // --- Loop principale --------------------------------------------------
+
+  function showFirstSlide(){
+    const layer = layers[current];
+    nextIndex = startIndex;
+    const built = fillLayer(layer);
+    const holdMs = built.holdMs;
+    applyMusic(built.music);
+    layer.style.transform = 'none';
+    layer.style.opacity = 1;
+    layer.style.zIndex = 2;
+    runKenBurns(built.kenburns, holdMs + TRANSITION_MS);
+    revealCaptions(built.captions, holdMs + TRANSITION_MS);
+    updateSlideTag(built);
+    warmWindow(nextIndex);
+    slideTimer = setTimeout(nextSlide, holdMs);
+  }
+
+  async function nextSlide(){
+    // finito l'elenco non si ricomincia: la proiezione si chiude e si torna
+    // alla schermata di avvio, dove si puo' scegliere da dove ripartire
+    if(nextIndex >= images.length){
+      endShow();
+      return;
+    }
+
+    // la foto che sta per entrare dev'essere pronta da dipingere, non solo
+    // scaricata: senza questa attesa il pannello bianco della coppia (o la
+    // cornice) compare vuoto e la foto ci si posa sopra un attimo dopo
+    await warmSlide(nextIndex);
+
+    // la proiezione puo' essere finita mentre si aspettava
+    if(slideTimer === null && liveTimer === null) return;
+
+    const outLayer = layers[current];
+    const inLayer  = layers[1 - current];
+
+    const built = fillLayer(inLayer);
+    const holdMs = built.holdMs;
+
+    // scaldo le prossime e lascio andare quelle passate
+    warmWindow(nextIndex);
+
+    // la musica cambia insieme all'immagine: la sfumatura audio parte qui,
+    // non a transizione finita, cosi' le due dissolvenze vanno a braccetto
+    applyMusic(built.music);
+
+    // passaggio netto chiesto dal pannello: nessuna animazione, la diapositiva
+    // e' semplicemente li'. Uso comunque le due animazioni (di durata zero)
+    // per non avere due strade diverse da mantenere
+    const netto = built.fx === 'none';
+
+    const effect = (built.skipEffect || netto) ? PLAIN_FADE : pickEffect();
+    const transitionMs = netto ? 0 : TRANSITION_MS;
+
+    inLayer.style.zIndex = 2;
+    outLayer.style.zIndex = 1;
+
+    // fondamentale: una Web Animation con fill:'forwards' resta "in vigore"
+    // finche' non viene cancellata esplicitamente o sostituita da una nuova
+    // animazione che tocca la STESSA proprieta' - impostare style.transform
+    // a mano (come facevo prima) NON la rimuove, continua a vincere lei.
+    // Un vecchio effetto 3D (es. cubo, finito a rotateY(90deg)) restava cosi'
+    // "appeso" e riappariva quando il ciclo successivo usava un fade semplice
+    // (che tocca solo opacity, mai transform) - qui lo cancello per davvero
+    inLayer.getAnimations().forEach(a => a.cancel());
+    outLayer.getAnimations().forEach(a => a.cancel());
+
+    const inAnim  = inLayer.animate(effect.inKF,  { duration:transitionMs, easing:'cubic-bezier(.65,0,.35,1)', fill:'forwards' });
+    const outAnim = outLayer.animate(effect.outKF, { duration:transitionMs, easing:'cubic-bezier(.65,0,.35,1)', fill:'forwards' });
+
+    await Promise.all([inAnim.finished, outAnim.finished]);
+
+    inLayer.style.opacity = 1;
+    inLayer.style.transform = 'none';
+    outLayer.style.opacity = 0;
+    outLayer.style.transform = 'none';
+
+    runKenBurns(built.kenburns, holdMs + transitionMs);
+    revealCaptions(built.captions, holdMs + transitionMs);
+
+    // il numero cambia quando la diapositiva e' arrivata davvero, non quando
+    // viene costruita: fillLayer prepara il layer prima della transizione
+    updateSlideTag(built);
+
+    current = 1 - current;
+    slideTimer = setTimeout(nextSlide, holdMs);
+  }
+
+  // chiude la proiezione e rimette la schermata iniziale: musica sfumata,
+  // schermo pulito, niente fullscreen. Da qui si puo' riavviare, anche da
+  // un'altra diapositiva
+  function endShow(){
+    clearTimeout(slideTimer);
+    clearInterval(liveTimer);
+    slideTimer = null;
+    liveTimer = null;
+
+    applyMusic(MUSIC_STOP);
+
+    layers.forEach(l => {
+      l.getAnimations().forEach(a => a.cancel());
+      l.innerHTML = '';
+      l.style.opacity = 0;
+      l.style.transform = 'none';
+      l.classList.remove('slide--darkText');
+    });
+
+    if(document.fullscreenElement && document.exitFullscreen){
+      document.exitFullscreen().catch(() => {});
+    }
+
+    // i bitmap tenuti pronti non servono piu': senza questo restano in memoria
+    // fino al prossimo avvio (e con foto grandi non sono pochi MB)
+    images.forEach(coolItem);
+
+    slideTag.style.display = 'none';
+
+    statusText.textContent = 'Proiezione finita: ' + images.length + ' diapositive.';
+    startBtn.disabled = false;
+    recBtn.disabled = false;
+    overlay.classList.remove('hidden');
+
+    // se si stava registrando, il file si chiude qui: saveRecording
+    // sovrascrive la riga di stato con nome e peso del filmato
+    if(recorder || capStream){
+      statusText.textContent = 'Proiezione finita: preparo il filmato...';
+      stopRecording();
+    }
+  }
+
+  // --- Registrazione in MP4 -----------------------------------------
+  //
+  // Lo slideshow e' fatto di elementi HTML con trasformazioni 3D, sfocature
+  // e due lettori audio: ridisegnarlo in un <canvas> per registrarlo
+  // vorrebbe dire riscrivere tutto il motore delle transizioni, e il
+  // risultato non sarebbe lo stesso. Qui invece si registra esattamente
+  // quello che si vede: il browser cattura questa scheda (video + audio
+  // della scheda) e MediaRecorder ne fa un file.
+  //
+  // Conseguenze da tenere a mente:
+  //  - si registra in tempo reale: un'ora di slideshow = un'ora di attesa;
+  //  - la risoluzione del filmato e' quella della finestra, quindi conviene
+  //    massimizzare la finestra prima di partire;
+  //  - la scheda va lasciata in primo piano: se si passa a un'altra scheda
+  //    il browser rallenta i timer e la registrazione ne risente.
+
+  let capStream = null;    // la cattura della scheda concessa dall'utente
+  let recorder  = null;    // MediaRecorder in corso
+  let recChunks = [];
+  let recMime   = '';
+  let recWanted = false;   // questo avvio deve essere registrato
+  let recError  = '';      // ultimo errore del registratore, da mostrare a fine
+  let saveDone  = false;   // il filmato di questo giro e' gia' stato salvato
+  let saveGuard = null;    // timer di sicurezza se l'evento 'stop' non arriva
+
+  // il primo formato supportato dal browser. Chrome recente sa scrivere
+  // direttamente MP4 (H.264 + AAC); dove non c'e' si ripiega su WebM, che
+  // e' comunque leggibile e convertibile
+  function pickRecMime(){
+    if(!window.MediaRecorder) return null;
+
+    const candidati = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+
+    for(const m of candidati){
+      if(MediaRecorder.isTypeSupported(m)) return m;
+    }
+
+    return null;
+  }
+
+  // chiede la cattura della scheda. Va chiamata dentro il click, prima di
+  // qualsiasi attesa lunga: il permesso richiede un gesto dell'utente
+  // ancora "fresco", e dopo un fetch non lo e' piu'
+  async function beginCapture(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+      statusText.textContent = 'Questo browser non sa registrare lo schermo: serve Chrome o Edge aggiornato.';
+      return false;
+    }
+
+    recMime = pickRecMime();
+
+    if(!recMime){
+      statusText.textContent = 'Questo browser non sa registrare video (MediaRecorder assente).';
+      return false;
+    }
+
+    const opzioni = {
+      video: { frameRate: 30 },
+      audio: true,
+      preferCurrentTab: true     // Chrome propone subito questa scheda
+    };
+
+    try{
+      capStream = await navigator.mediaDevices.getDisplayMedia(opzioni);
+    }catch(err){
+      // preferCurrentTab non e' ovunque: se e' lui a dare fastidio si
+      // richiede senza, e l'utente sceglie la scheda a mano
+      if(err && (err.name === 'TypeError' || err.name === 'InvalidStateError' || err.name === 'NotSupportedError')){
+        try{
+          capStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+        }catch(err2){
+          statusText.textContent = 'Registrazione annullata: ' + err2.message;
+          return false;
+        }
+      }else{
+        statusText.textContent = (err && err.name === 'NotAllowedError')
+          ? 'Registrazione annullata: non hai condiviso la scheda.'
+          : 'Non riesco ad avviare la registrazione: ' + (err ? err.message : 'errore sconosciuto');
+        return false;
+      }
+    }
+
+    // se l'utente ferma la condivisione dalla barra di Chrome la
+    // proiezione si chiude e il pezzo registrato fin li' viene salvato
+    const video = capStream.getVideoTracks()[0];
+    if(video) video.addEventListener('ended', () => { if(slideTimer || recorder) endShow(); });
+
+    return true;
+  }
+
+  // libera la cattura senza produrre nessun file (avvio fallito)
+  function abortCapture(){
+    clearTimeout(saveGuard);
+    if(capStream) capStream.getTracks().forEach(t => t.stop());
+    capStream = null;
+    recorder = null;
+    recChunks = [];
+    recWanted = false;
+  }
+
+  function beginRecording(){
+    if(!capStream) return;
+
+    recChunks = [];
+    recError  = '';
+    saveDone  = false;
+    clearTimeout(saveGuard);
+
+    try{
+      recorder = new MediaRecorder(capStream, {
+        mimeType: recMime,
+        videoBitsPerSecond: 8000000,
+        audioBitsPerSecond: 128000
+      });
+    }catch(err){
+      showNotice('Registrazione non avviata: ' + err.message);
+      abortCapture();
+      return;
+    }
+
+    recorder.ondataavailable = ev => { if(ev.data && ev.data.size) recChunks.push(ev.data); };
+    recorder.onstop = saveRecording;
+
+    // senza questo un errore del registratore (memoria finita, codec che
+    // molla a meta') resterebbe muto: la proiezione andrebbe avanti e alla
+    // fine non uscirebbe nessun file, senza spiegazioni
+    recorder.onerror = ev => {
+      const e = ev && ev.error;
+      console.error('[slideshow] errore del registratore', e || ev);
+      recError = e ? (e.name + ': ' + e.message) : 'errore sconosciuto';
+    };
+
+    // un pezzo al secondo: se qualcosa va storto a meta' proiezione, quello
+    // che e' stato registrato fin li' e' gia' in mano nostra
+    recorder.start(1000);
+
+    if(!capStream.getAudioTracks().length){
+      showNotice("Attenzione: nessun audio catturato, il filmato sara’ muto.");
+    }
+  }
+
+  function stopRecording(){
+    if(saveDone) return;
+
+    if(recorder && recorder.state !== 'inactive'){
+      try{ recorder.requestData(); }catch(err){}   // l'ultimo pezzo, quello in corso
+      recorder.stop();                             // il file lo costruisce saveRecording
+
+      // rete di sicurezza: se 'stop' non arriva (registratore gia' morto per
+      // conto suo, evento perso) il filmato si salva lo stesso con i pezzi
+      // raccolti fino a questo momento. Senza, la schermata restava per
+      // sempre su "preparo il filmato..."
+      clearTimeout(saveGuard);
+      saveGuard = setTimeout(() => {
+        if(!saveDone){
+          console.warn('[slideshow] evento stop non arrivato: salvo lo stesso');
+          saveRecording();
+        }
+      }, 8000);
+
+      return;
+    }
+
+    // il registratore si era gia' fermato da solo (per esempio perche' la
+    // condivisione della scheda e' finita): i pezzi ci sono, vanno salvati,
+    // non buttati
+    if(recChunks.length){
+      saveRecording();
+      return;
+    }
+
+    abortCapture();
+    statusText.textContent = 'Registrazione interrotta: non e’ stato registrato niente'
+      + (recError ? ' (' + recError + ')' : '') + '.';
+  }
+
+  function saveRecording(){
+    if(saveDone) return;
+    saveDone = true;
+    clearTimeout(saveGuard);
+
+    console.log('[slideshow] salvo il filmato: ' + recChunks.length + ' pezzi, stato registratore ' +
+                (recorder ? recorder.state : 'assente'));
+
+    try{
+      buildAndDownload();
+    }catch(err){
+      console.error('[slideshow] salvataggio fallito', err);
+      statusText.textContent = 'Non riesco a salvare il filmato: ' + err.message;
+    }
+  }
+
+  function buildAndDownload(){
+    const tracce = capStream ? capStream.getTracks() : [];
+    tracce.forEach(t => t.stop());
+
+    const mimeBase = (recMime || 'video/webm').split(';')[0];
+    const est = mimeBase.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+    const blob = new Blob(recChunks, { type: mimeBase });
+
+    capStream = null;
+    recorder = null;
+    recChunks = [];
+    recWanted = false;
+
+    if(!blob.size){
+      statusText.textContent = "Registrazione vuota: non e’ stato salvato niente"
+        + (recError ? " (" + recError + ")" : "") + ".";
+      return;
+    }
+
+    const d = new Date();
+    const due = n => String(n).padStart(2, '0');
+    const nome = 'san-diego-2026-' + d.getFullYear() + due(d.getMonth() + 1) + due(d.getDate()) +
+                 '-' + due(d.getHours()) + due(d.getMinutes()) + '.' + est;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+    const mb = (blob.size / 1048576).toFixed(1);
+
+    statusText.textContent = 'Filmato salvato: ' + nome + ' (' + mb + ' MB)' +
+      (est === "webm" ? " — questo browser non scrive MP4, il file e’ WebM." : "");
+  }
+
+  // --- Avvio --------------------------------------------------------
+
+  async function start(){
+    startBtn.disabled = true;
+    statusText.textContent = 'Carico l\'elenco immagini da GitHub...';
+
+    // Lo stato del canale live va azzerato a ogni avvio, non solo al
+    // caricamento della pagina. Senza, alla seconda proiezione 'liveSince'
+    // resta all'ultima risposta della prima: il registro viene interrogato
+    // con since=<ieri sera> e non riannuncia piu' niente, quindi le foto
+    // arrivate in diretta perdono le regole loro (intera, 3 secondi) e
+    // tornano a inquadratura a sorte - compresa la coppia.
+    // Trovato dal vivo il 20/08/2026: alla prima proiezione andava, dalla
+    // seconda no.
+    liveSince = 0;
+    knownNames.clear();
+    retryQueue = [];
+
+    try{
+      images = await fetchImages();
+    }catch(err){
+      statusText.textContent = 'Errore nel caricamento immagini: ' + err.message;
+      startBtn.disabled = false;
+      recBtn.disabled = false;
+      return;
+    }
+
+    if(images.length === 0){
+      statusText.textContent = 'Nessuna immagine trovata nella cartella "' + FOLDER + '" del repository.';
+      startBtn.disabled = false;
+      recBtn.disabled = false;
+      return;
+    }
+
+    // diapositiva di partenza (campo in home): fuori intervallo si riparte
+    // dall'inizio, cosi' una cifra sbagliata non lascia lo schermo nero
+    const chiesta = parseInt(startAtInput.value, 10);
+
+    startIndex = (chiesta >= 1 && chiesta <= images.length) ? chiesta - 1 : 0;
+
+    // il numero fuori intervallo non va lasciato passare in silenzio, ma
+    // nemmeno scritto qui: fra un istante questa riga dice "precarico..."
+    const avvisoPartenza = (chiesta >= 1 && chiesta > images.length)
+      ? 'Ci sono solo ' + images.length + ' diapositive: parto dalla prima'
+      : (startIndex > 0 ? 'Parto dalla diapositiva ' + (startIndex + 1) : null);
+
+    statusText.textContent = 'Precarico ' + images.length + ' immagini...';
+    await Promise.all(images.map(preloadItem));
+
+    // il registro live si legge PRIMA di mandare in scena qualcosa: e' li'
+    // che si sa quali foto sono arrivate in diretta, e quindi vanno intere e
+    // 3 secondi. Lasciarlo al primo giro del polling (che parte dopo) vuol
+    // dire che le prime diapositive sarebbero gia' state costruite con le
+    // regole sbagliate
+    statusText.textContent = 'Leggo le foto arrivate in diretta...';
+    await pollLive();
+
+    // il precaricamento dice solo che le foto ci sono; la prima (e la sua
+    // eventuale compagna di coppia) dev'essere anche gia' decodificata,
+    // altrimenti la proiezione si apre con un lampo bianco
+    await warmSlide(startIndex);
+
+    // fullscreen + musica richiedono un gesto utente: siamo dentro il click handler.
+    // In registrazione il fullscreen si salta: la cattura riprende comunque
+    // solo il contenuto della pagina (la cornice del browser non entra nel
+    // filmato) e dopo il pannello di condivisione la richiesta verrebbe
+    // rifiutata
+    if(stage.requestFullscreen && !recWanted){
+      stage.requestFullscreen().catch(() => {});
+    }
+
+    watchPlayers();
+    unlockPlayers();
+
+    overlay.classList.add('hidden');
+
+    // il registratore parte con la schermata iniziale gia' sparita, cosi'
+    // il filmato comincia dal nero e non dal pannello di avvio
+    if(recWanted) beginRecording();
+
+    showFirstSlide();
+
+    if(avvisoPartenza) showNotice(avvisoPartenza);
+
+    // il primo giro e' gia' stato fatto sopra (da since=0, cioe' con tutto il
+    // registro): da qui in poi si chiede solo cosa arriva di nuovo
+    liveTimer = setInterval(pollLive, LIVE_POLL_MS);
+  }
+
+  startBtn.addEventListener('click', () => {
+    recWanted = false;
+    start();
   });
 
-  init();
+  recBtn.addEventListener('click', async () => {
+    recBtn.disabled = true;
+    startBtn.disabled = true;
+    statusText.textContent = 'Scegli questa scheda (con l\'audio) nel pannello di Chrome...';
+
+    const ok = await beginCapture();
+
+    if(!ok){
+      recBtn.disabled = false;
+      startBtn.disabled = false;
+      recBtn.disabled = false;
+      return;
+    }
+
+    recWanted = true;
+    await start();
+
+    // start() esce anche quando qualcosa e' andato storto (elenco vuoto,
+    // errore di rete): li' non c'e' nessuna proiezione da registrare e la
+    // cattura va restituita, altrimenti Chrome resta a condividere la
+    // scheda a vuoto
+    if(!slideTimer) abortCapture();
+  });
 
 })();
 </script>
