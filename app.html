@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 
 <!--
   App dei delegati - Eternal Happiness Convention 2026, San Diego.
@@ -256,6 +257,17 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
 }
 .seg label:has(input:checked){ border-color:var(--navy); background:var(--cream); }
 .seg input{ accent-color:var(--navy); }
+#inst{
+  position:fixed; left:12px; right:12px; bottom:calc(var(--tabbar) + 12px + env(safe-area-inset-bottom));
+  z-index:40; background:#fff; border-radius:18px; box-shadow:0 12px 40px rgba(19,41,75,.3);
+  padding:14px; display:flex; gap:12px; align-items:flex-start; max-width:560px; margin:0 auto;
+}
+#inst.hidden{ display:none; }
+#inst img{ width:56px; height:56px; border-radius:14px; flex:none; }
+#inst .instBody{ display:flex; flex-direction:column; gap:4px; font-size:15px; color:var(--ink); }
+#inst .instBody span{ color:var(--muted); font-size:14px; line-height:1.4; }
+#inst .instBtns{ display:flex; gap:12px; align-items:center; margin-top:8px; }
+#inst .instBtns .btn{ width:auto; padding:10px 18px; margin:0; }
 #cam{ position:fixed; inset:0; z-index:60; background:#000; }
 #cam.hidden{ display:none; }
 #camVideo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
@@ -440,6 +452,18 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 <body>
 
 <!-- codice assente o sconosciuto -->
+<div id="inst" class="hidden" role="dialog" aria-label="Aggiungi alla Home">
+  <img src="icon-192.png" alt="">
+  <div class="instBody">
+    <b>Aggiungi l’app alla Home</b>
+    <span id="instText">Così la ritrovi con un tocco, come un’app.</span>
+    <div class="instBtns">
+      <button type="button" class="btn btn-primary" id="instGo">Aggiungi</button>
+      <button type="button" class="linkBtn" id="instNo">Non ora</button>
+    </div>
+  </div>
+</div>
+
 <div id="cam" class="hidden">
   <video id="camVideo" autoplay muted playsinline></video>
   <div id="camFlash"></div>
@@ -540,6 +564,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
         </div>
 
         <button class="btn btn-gold" id="setSave" type="button">Salva</button>
+
+        <button class="btn btn-outline hidden" id="instOpt" type="button" style="margin-top:12px">📲 Aggiungi l’app alla Home</button>
         <div class="msg" id="setMsgOut"></div>
       </div>
     </section>
@@ -629,7 +655,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   const $ = id => document.getElementById(id);
 
-  const code = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase();
+  // dall'icona sulla Home l'app si apre senza ?u=: il codice e' quello
+  // ricordato all'ultima apertura dal link personale
+  let savedCode = '';
+  try{ savedCode = localStorage.getItem('sd-code') || ''; }catch(e){}
+  const code = ((new URLSearchParams(location.search).get('u') || '').trim() || savedCode).toLowerCase();
 
   // ------------------------------------------------------ impostazioni
   // nome, messaggio, avvio automatico e "Registra MP4" dello slideshow di
@@ -685,6 +715,77 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   }
 
   $('quickSkip').addEventListener('click', () => $('quick').classList.add('hidden'));
+
+  // --------------------------------------------- aggiungi alla Home
+  // Android/Chrome: il browser lascia proporre l'installazione (beforeinstallprompt)
+  // e la finestra vera la apre lui, dopo il nostro tocco su "Aggiungi".
+  // iPhone/Safari: nessuna richiesta automatica possibile, solo istruzioni.
+  // Il riquadro esce da solo una volta; poi resta il pulsante in Opzioni
+
+  let installEvt = null;
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installEvt = e;
+    $('instOpt').classList.remove('hidden');
+    maybeAskInstall();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    $('inst').classList.add('hidden');
+    $('instOpt').classList.add('hidden');
+  });
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  let installReady = false;
+
+  function setupInstall(){
+    installReady = true;
+    if(isStandalone()) return;
+    if(isIOS()) $('instOpt').classList.remove('hidden');
+    maybeAskInstall();
+  }
+
+  function maybeAskInstall(){
+    if(!installReady || isStandalone()) return;
+
+    let asked = false;
+    try{ asked = localStorage.getItem('sd-install-asked') === '1'; }catch(e){}
+    if(asked) return;
+
+    if(installEvt || isIOS()) showInstall();
+  }
+
+  function showInstall(){
+    if(isIOS() && !installEvt){
+      $('instText').innerHTML = 'Tocca <b>Condividi</b> <span aria-hidden="true">⎙</span> in basso e poi <b>«Aggiungi alla schermata Home»</b>.';
+      $('instGo').textContent = 'Ho capito';
+    }
+    $('inst').classList.remove('hidden');
+  }
+
+  function closeInstall(){
+    $('inst').classList.add('hidden');
+    try{ localStorage.setItem('sd-install-asked', '1'); }catch(e){}
+  }
+
+  $('instGo').addEventListener('click', async () => {
+    if(installEvt){
+      installEvt.prompt();
+      try{ await installEvt.userChoice; }catch(e){}
+      installEvt = null;
+    }
+    closeInstall();
+  });
+
+  $('instNo').addEventListener('click', closeInstall);
+  $('instOpt').addEventListener('click', showInstall);
 
   // ------------------------------------------------------ fotocamera
 
@@ -892,6 +993,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     }
 
     $('whoCode').textContent = code;
+    try{ localStorage.setItem('sd-code', code); }catch(e){}
+    setupInstall();
     $('showLink').href = 'index.html?u=' + encodeURIComponent(code);
     $('app').classList.remove('hidden');
 
