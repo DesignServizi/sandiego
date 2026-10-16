@@ -240,6 +240,14 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
   transition:width .3s;
 }
 
+.field{ display:block; margin:0 0 14px; }
+.field span{ display:block; font-size:14px; font-weight:600; color:var(--muted); margin-bottom:6px; }
+.field input, .field textarea{
+  width:100%; box-sizing:border-box; font:inherit; font-size:16px;
+  padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+  background:#fff; color:var(--ink); resize:vertical;
+}
+.field input:focus, .field textarea:focus{ outline:2px solid var(--sea); border-color:transparent; }
 .msg{ margin-top:12px; font-size:15px; text-align:center; min-height:1em; }
 .msg.ok{ color:var(--ok); }
 .msg.bad{ color:var(--bad); }
@@ -419,6 +427,35 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
         <p class="lead">Le foto di tutti i fratelli più quelle che hai scattato tu, una dopo l'altra. Le foto che invii mentre lo guardi si aggiungono in coda.</p>
         <a class="btn btn-primary" id="showLink" href="index.html">&#9654; Guarda lo slideshow</a>
       </div>
+
+      <!-- quello che vede chi scansiona il tuo QR code: ogni codice ha i suoi -->
+      <div class="card">
+        <h2>Il tuo slideshow</h2>
+        <p class="lead">Nome e messaggio compaiono sotto il titolo, a chi apre il tuo QR code.</p>
+
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="setName" maxlength="80" placeholder="es. Cretella Family">
+        </label>
+
+        <label class="field">
+          <span>Messaggio</span>
+          <textarea id="setMsg" maxlength="300" rows="3" placeholder="es. The Cretella family thanks you for your love and hospitality."></textarea>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setAuto">
+          <span><b>Avvio automatico</b>: lo slideshow parte da solo, senza il pulsante «Avvia slideshow».</span>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setRec">
+          <span>Mostra il pulsante <b>Registra MP4</b> (solo da computer).</span>
+        </label>
+
+        <button class="btn btn-gold" id="setSave" type="button">Salva</button>
+        <div class="msg" id="setMsgOut"></div>
+      </div>
     </section>
 
     <!-- CARICA -->
@@ -507,6 +544,52 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   const code = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase();
 
+  // ------------------------------------------------------ impostazioni
+  // nome, messaggio, avvio automatico e "Registra MP4" dello slideshow di
+  // questo codice: stanno sul server (api.php, data/settings_<codice>.json)
+
+  async function loadSettings(){
+    try{
+      const r = await fetch(API + 'api.php?a=settings&u=' + encodeURIComponent(code), { cache:'no-store' });
+      const j = await r.json();
+      if(!j.success) return;
+      $('setName').value  = j.settings.name || '';
+      $('setMsg').value   = j.settings.message || '';
+      $('setAuto').checked = !!j.settings.autostart;
+      $('setRec').checked  = !!j.settings.rec;
+    }catch(e){}
+  }
+
+  async function saveSettings(){
+    const out = $('setMsgOut');
+    const fd = new FormData();
+    fd.append('a', 'save');
+    fd.append('u', code);
+    fd.append('name', $('setName').value);
+    fd.append('message', $('setMsg').value);
+    if($('setAuto').checked) fd.append('autostart', '1');
+    if($('setRec').checked) fd.append('rec', '1');
+
+    $('setSave').disabled = true;
+    out.className = 'msg';
+    out.textContent = 'Salvo...';
+
+    try{
+      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+      const j = await r.json();
+      if(!j.success) throw new Error(j.error || 'errore');
+      out.className = 'msg ok';
+      out.textContent = 'Salvato ✓';
+    }catch(e){
+      out.className = 'msg bad';
+      out.textContent = 'Non salvato: ' + e.message;
+    }
+
+    $('setSave').disabled = false;
+  }
+
+  $('setSave').addEventListener('click', saveSettings);
+
   // ------------------------------------------------------------ avvio
 
   async function init(){
@@ -538,6 +621,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     $('app').classList.remove('hidden');
 
     try{ $('consent').checked = localStorage.getItem('sd-consent') === '1'; }catch(e){}
+
+    loadSettings();
 
     let start = 'show';
     try{ start = sessionStorage.getItem('sd-tab') || 'show'; }catch(e){}

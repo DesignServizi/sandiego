@@ -465,10 +465,28 @@
      lo schermo resta pulito. L'indicazione "ESC per uscire dal fullscreen"
      stava qui ed e' stata tolta */
 
+  #delegateName{
+    font-family:Georgia,'Times New Roman',serif;
+    font-style:italic;
+    font-size:clamp(22px,3.6vw,36px);
+    color:#f2c230;
+    margin-top:-8px;
+  }
+
+  #delegateMsg{
+    max-width:640px;
+    font-size:clamp(16px,2.2vw,20px);
+    line-height:1.5;
+    opacity:.9;
+    padding:0 16px;
+  }
+
+  #overlay .hidden{ display:none !important; }
+
   /* sul telefono registrazione MP4 e "parti dalla diapositiva" non servono
      (getDisplayMedia li' non esiste): restano solo per il computer */
   @media (pointer:coarse){
-    #recBtn, #recHint, #startAtRow{ display:none !important; }
+    #recBtn{ display:none !important; }
   }
 
   .hidden{ display:none !important; }
@@ -479,30 +497,21 @@
 
   <div id="overlay">
     <h1>Eternal Happiness · San Diego 2026</h1>
-    <p id="statusText">Pronto per avviare lo slideshow</p>
+    <!-- nome e messaggio li scrive il delegato nell'app (app.html) -->
+    <div id="delegateName" class="hidden"></div>
+    <div id="delegateMsg" class="hidden"></div>
+    <p id="statusText"></p>
 
-    <!-- serve alle prove: per rivedere la diapositiva 60 non si ha voglia di
-         aspettare le prime 59. Vuoto = si parte dall'inizio -->
-    <label id="startAtRow">
-      Parti dalla diapositiva
-      <input id="startAt" type="number" min="1" step="1" placeholder="1">
-      <span>vuoto = dall'inizio</span>
-    </label>
 
     <div id="btnRow">
-      <button id="startBtn">&#9654; Avvia slideshow</button>
+      <button id="startBtn" class="hidden">&#9654; Avvia slideshow</button>
 
       <!-- registra la proiezione cosi' com'e' (transizioni 3D e musica
            comprese) catturando questa scheda del browser, e a fine
            slideshow scarica il filmato -->
-      <button id="recBtn">&#9679; Registra MP4</button>
+      <button id="recBtn" class="hidden">&#9679; Registra MP4</button>
     </div>
 
-    <p id="recHint">La registrazione dura quanto lo slideshow: Chrome chiede quale scheda condividere — scegli <b>questa</b> e spunta <b>Condividi anche l'audio della scheda</b>. Non cambiare scheda durante la registrazione.</p>
-    <!-- di questo file girano in giro copie vecchie (E:\slideshow.html e
-         simili): la riga qui sotto dice a colpo d'occhio se quella aperta e'
-         la versione con musica, durate e foto in diretta -->
-    <p id="buildInfo">foto comuni + foto del delegato · foto in diretta · motore Amalfi Belvedere — 16/10/2026</p>
   </div>
 
   <div id="stage">
@@ -604,7 +613,6 @@
   const statusText = document.getElementById('statusText');
   const startBtn   = document.getElementById('startBtn');
   const recBtn     = document.getElementById('recBtn');
-  const startAtInput = document.getElementById('startAt');
   const stage      = document.getElementById('stage');
   const layers     = [document.getElementById('slideA'), document.getElementById('slideB')];
   const players    = [document.getElementById('musicA'), document.getElementById('musicB')];
@@ -2078,7 +2086,9 @@
 
     slideTag.style.display = 'none';
 
-    statusText.textContent = 'Proiezione finita: ' + images.length + ' diapositive.';
+    statusText.textContent = '';
+    // a fine giro il pulsante serve per rivederlo, anche con l'avvio automatico
+    startBtn.classList.remove('hidden');
     startBtn.disabled = false;
     recBtn.disabled = false;
     overlay.classList.remove('hidden');
@@ -2333,7 +2343,7 @@
 
   async function start(){
     startBtn.disabled = true;
-    statusText.textContent = 'Carico l\'elenco immagini da GitHub...';
+    statusText.textContent = '';
 
     // Lo stato del canale live va azzerato a ogni avvio, non solo al
     // caricamento della pagina. Senza, alla seconda proiezione 'liveSince'
@@ -2365,7 +2375,7 @@
 
     // diapositiva di partenza (campo in home): fuori intervallo si riparte
     // dall'inizio, cosi' una cifra sbagliata non lascia lo schermo nero
-    const chiesta = parseInt(startAtInput.value, 10);
+    const chiesta = NaN;   // qui niente "parti dalla diapositiva": sempre dall'inizio
 
     startIndex = (chiesta >= 1 && chiesta <= images.length) ? chiesta - 1 : 0;
 
@@ -2375,7 +2385,7 @@
       ? 'Ci sono solo ' + images.length + ' diapositive: parto dalla prima'
       : (startIndex > 0 ? 'Parto dalla diapositiva ' + (startIndex + 1) : null);
 
-    statusText.textContent = 'Precarico ' + images.length + ' immagini...';
+    statusText.textContent = '';
     await Promise.all(images.map(preloadItem));
 
     // il registro live si legge PRIMA di mandare in scena qualcosa: e' li'
@@ -2383,7 +2393,7 @@
     // 3 secondi. Lasciarlo al primo giro del polling (che parte dopo) vuol
     // dire che le prime diapositive sarebbero gia' state costruite con le
     // regole sbagliate
-    statusText.textContent = 'Leggo le foto arrivate in diretta...';
+    statusText.textContent = '';
     await pollLive();
 
     // il precaricamento dice solo che le foto ci sono; la prima (e la sua
@@ -2417,6 +2427,38 @@
     // registro): da qui in poi si chiede solo cosa arriva di nuovo
     liveTimer = setInterval(pollLive, LIVE_POLL_MS);
   }
+
+  // --- Impostazioni del delegato (app.html) ---------------------------
+  // ogni codice ha le sue: nome e messaggio sotto il titolo; con l'avvio
+  // automatico niente pulsante, "Registra MP4" solo se il delegato l'ha acceso
+  async function applySettings(){
+    let st = {};
+
+    if(USER){
+      try{
+        const r = await fetch(LIVE_HOST + 'api.php?a=settings&' + USER_Q, { cache:'no-store' });
+        const j = await r.json();
+        if(j && j.success) st = j.settings || {};
+      }catch(e){}
+    }
+
+    const nameEl = document.getElementById('delegateName');
+    const msgEl  = document.getElementById('delegateMsg');
+
+    if(st.name){ nameEl.textContent = st.name; nameEl.classList.remove('hidden'); }
+    if(st.message){ msgEl.textContent = st.message; msgEl.classList.remove('hidden'); }
+
+    if(st.rec) recBtn.classList.remove('hidden');
+
+    if(st.autostart){
+      recWanted = false;
+      start();
+    }else{
+      startBtn.classList.remove('hidden');
+    }
+  }
+
+  applySettings();
 
   startBtn.addEventListener('click', () => {
     recWanted = false;
