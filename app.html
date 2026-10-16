@@ -174,7 +174,7 @@ h2{
 /* ---------- carica ---------- */
 .queue{
   display:grid;
-  grid-template-columns:repeat(4, 1fr);
+  grid-template-columns:repeat(3, 1fr);
   gap:8px;
   margin:16px 0;
 }
@@ -368,7 +368,7 @@ nav{
   background:#fff;
   border-top:1px solid var(--line);
   display:grid;
-  grid-template-columns:repeat(3, 1fr);
+  grid-template-columns:repeat(4, 1fr);
   z-index:30;
 }
 
@@ -386,6 +386,7 @@ nav button{
 }
 
 nav button .ic{ font-size:22px; line-height:1; }
+nav button{ min-width:0; white-space:nowrap; font-size:11.5px; }
 nav button[aria-selected="true"]{ color:var(--navy); font-weight:700; }
 nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
@@ -466,7 +467,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     <div>
       <div class="t1">Eternal Happiness</div>
       <div class="t2">San Diego 2026</div>
-      <div class="who">Codice: <b id="whoCode"></b></div>
+      <div class="who"><b id="whoCode"></b></div>
     </div>
   </header>
 
@@ -622,6 +623,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   // nome, messaggio, avvio automatico e "Registra MP4" dello slideshow di
   // questo codice: stanno sul server (api.php, data/settings_<codice>.json)
 
+  // in testata il nome scelto in Opzioni; finche' non c'e', il codice
+  function showWho(name){
+    $('whoCode').textContent = (name || '').trim() || code;
+  }
+
   async function loadSettings(){
     try{
       const r = await fetch(API + 'api.php?a=settings&u=' + encodeURIComponent(code), { cache:'no-store' });
@@ -631,6 +637,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       $('setMsg').value   = j.settings.message || '';
       $('setAuto').checked = !!j.settings.autostart;
       $('setRec').checked  = !!j.settings.rec;
+      showWho(j.settings.name);
       $('setConsent').checked = !!j.settings.consent;
 
       const open = ['camera', 'gallery'].includes(j.settings.open) ? j.settings.open : 'choice';
@@ -778,6 +785,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       if(!j.success) throw new Error(j.error || 'errore');
       out.className = 'msg ok';
       out.textContent = 'Salvato ✓';
+      showWho(j.settings.name);
     }catch(e){
       out.className = 'msg bad';
       out.textContent = 'Non salvato: ' + e.message;
