@@ -792,6 +792,56 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   let camStream = null;
   let camFacing = 'environment';
   let camShots = 0;
+
+  // Telefono girato in orizzontale. Se lo schermo non ruota (blocco rotazione
+  // del telefono, o app installata) il flusso della fotocamera resta verticale
+  // e la foto uscirebbe coricata. Il giroscopio dice come e' tenuto davvero il
+  // telefono: allo scatto si ruota la foto di quanto il telefono e' girato
+  // rispetto allo schermo. Se lo schermo ha gia' ruotato la differenza e' 0.
+  // devRot = gradi in senso antiorario (stessa convenzione di screen.orientation.angle)
+  let devRot = 0;
+  let devSeen = false;   // arrivato almeno un dato dal giroscopio
+  let motionAsk = null;  // iPhone: richiesta di permesso in corso
+
+  function onDevOrient(e){
+    if(e.beta == null || e.gamma == null) return;
+    devSeen = true;
+    const b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
+    // direzione "su" vista nel piano dello schermo (x a destra, y verso l'alto)
+    const ux = -Math.cos(b) * Math.sin(g);
+    const uy = Math.sin(b);
+    // telefono quasi piatto: si tiene l'ultimo valore buono
+    if(Math.hypot(ux, uy) < 0.45) return;
+    if(Math.abs(ux) > Math.abs(uy) * 1.2) devRot = ux > 0 ? 90 : 270;
+    else if(Math.abs(uy) > Math.abs(ux) * 1.2) devRot = uy > 0 ? 0 : 180;
+    // nella zona di mezzo (circa 45 gradi) resta la scelta precedente
+  }
+
+  window.addEventListener('deviceorientation', onDevOrient);
+
+  // iPhone: il giroscopio va chiesto dentro un tocco. Si chiede al primo tocco
+  // qualsiasi sulla pagina, cosi' quando si scatta e' gia' attivo
+  if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    const askMotion = () => {
+      document.removeEventListener('pointerdown', askMotion, true);
+      motionAsk = DeviceOrientationEvent.requestPermission().catch(() => {});
+    };
+    document.addEventListener('pointerdown', askMotion, true);
+  }
+
+  // di quanto ruotare lo scatto. Non si usa l'angolo dello schermo (iPhone e
+  // Android non lo contano allo stesso modo): basta confrontare il fotogramma
+  // col modo in cui e' tenuto il telefono. Fotogramma gia' orizzontale col
+  // telefono in orizzontale = lo schermo ha ruotato da solo, niente da fare.
+  function shotTurn(vw, vh){
+    const frameLandscape = vw > vh;
+    let t = devRot;
+    if((t === 90 || t === 270) && frameLandscape) return 0;
+    if((t === 0 || t === 180) && frameLandscape) return 0;   // caso strano: non si tocca
+    // la frontale vede la scena da davanti: destra e sinistra sono invertite
+    if(camFacing === 'user' && (t === 90 || t === 270)) t = 360 - t;
+    return t;
+  }
   let toastTimer = null;
 
   function camToast(text){
@@ -849,14 +899,31 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     if(document.hidden && camStream) closeCam();
   });
 
-  $('camShot').addEventListener('click', () => {
+  $('camShot').addEventListener('click', async () => {
     const v = $('camVideo');
     if(!camStream || !v.videoWidth) return;
 
+    // iPhone con la fotocamera aperta subito: il primo tocco e' proprio lo
+    // scatto, quindi il permesso del giroscopio e' appena stato chiesto.
+    // Si aspetta il primo dato (al massimo 400 ms) per non coricare la foto
+    if(motionAsk && !devSeen){
+      await motionAsk;
+      for(let i = 0; i < 8 && !devSeen; i++) await new Promise(r => setTimeout(r, 50));
+    }
+
+    const vw = v.videoWidth, vh = v.videoHeight;
+    // 0, 90, 180, 270 in senso antiorario
+    const turn = shotTurn(vw, vh);
+    const side = turn === 90 || turn === 270;
+
     const c = document.createElement('canvas');
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
-    c.getContext('2d').drawImage(v, 0, 0);
+    c.width  = side ? vh : vw;
+    c.height = side ? vw : vh;
+
+    const ctx = c.getContext('2d');
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate(-turn * Math.PI / 180);   // telefono girato a sinistra = foto ruotata a sinistra
+    ctx.drawImage(v, -vw / 2, -vh / 2);
 
     $('camFlash').classList.add('on');
     requestAnimationFrame(() => requestAnimationFrame(() => $('camFlash').classList.remove('on')));
