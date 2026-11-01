@@ -857,7 +857,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     camStream = null;
   }
 
-  async function openCam(){
+  async function openCam(keepCount){
     stopCam();
 
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
@@ -878,8 +878,26 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     $('camVideo').srcObject = camStream;
     $('cam').classList.remove('hidden');
-    camShots = 0;
+    if(!keepCount) camShots = 0;
     return true;
+  }
+
+  // Android: ruotando lo schermo a fotocamera aperta, la frontale continua a
+  // mandare i fotogrammi con l'orientamento di prima e l'anteprima esce
+  // sottosopra (visto dall'utente 01/11/2026). Riaprire la fotocamera dopo la
+  // rotazione le fa prendere l'orientamento nuovo
+  let camRotTimer = null;
+
+  function camAfterRotate(){
+    if(!camStream) return;
+    clearTimeout(camRotTimer);
+    camRotTimer = setTimeout(() => { if(camStream) openCam(true); }, 350);
+  }
+
+  if(screen.orientation && screen.orientation.addEventListener){
+    screen.orientation.addEventListener('change', camAfterRotate);
+  }else{
+    window.addEventListener('orientationchange', camAfterRotate);
   }
 
   function closeCam(){
