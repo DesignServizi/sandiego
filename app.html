@@ -838,8 +838,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     let t = devRot;
     if((t === 90 || t === 270) && frameLandscape) return 0;
     if((t === 0 || t === 180) && frameLandscape) return 0;   // caso strano: non si tocca
-    // la frontale vede la scena da davanti: destra e sinistra sono invertite
-    if(camFacing === 'user' && (t === 90 || t === 270)) t = 360 - t;
+    // frontale: stesso verso della posteriore (provato su telefono 01/11/2026:
+    // invertirlo la faceva uscire sottosopra)
     return t;
   }
   let toastTimer = null;
