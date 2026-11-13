@@ -542,6 +542,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           <span>Spunta già la dichiarazione <b>«Dichiaro di avere i diritti…»</b> quando carico le foto.</span>
         </label>
 
+        <label class="consent">
+          <input type="checkbox" id="setCommon">
+          <span><b>Aggiungi foto comuni al termine</b>: dopo le tue foto lo slideshow mostra anche quelle comuni.</span>
+        </label>
+
         <div class="field">
           <span>Musica dello slideshow</span>
           <div id="musicNow" class="lead" style="margin:0 0 8px">Nessuna musica</div>
@@ -580,6 +585,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           <button class="btn btn-gold" id="camBtn" type="button">📷 Scatta</button>
           <button class="btn btn-outline" id="galBtn" type="button">🖼 Galleria</button>
         </div>
+        <p class="lead" id="galHint" style="margin:8px 0 0;font-size:.9em">ℹ️ Dalla galleria puoi scegliere al massimo 5 foto alla volta (e 20 all'ora). Le foto scattate con l'app non hanno limiti.</p>
 
         <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
         <input type="file" id="galInput" accept="image/*" multiple hidden>
@@ -681,6 +687,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       $('setRec').checked  = !!j.settings.rec;
       showWho(j.settings.name);
       $('setConsent').checked = !!j.settings.consent;
+      $('setCommon').checked = !!j.settings.common;
       showMusic(j.settings);
 
       const open = ['camera', 'gallery'].includes(j.settings.open) ? j.settings.open : 'choice';
@@ -705,7 +712,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     if(st.open === 'camera'){
       openCam();
     }else if(st.open === 'gallery'){
-      $('quickGo').innerHTML = '🖼<br>Galleria';
+      $('quickGo').innerHTML = '🖼<br>Galleria<br><small style="font-size:.45em;font-weight:400">massimo 5 foto alla volta</small>';
       $('quickGo').onclick = () => {
         $('quick').classList.add('hidden');
         $('galInput').click();
@@ -972,6 +979,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     if($('setAuto').checked) fd.append('autostart', '1');
     if($('setRec').checked) fd.append('rec', '1');
     if($('setConsent').checked) fd.append('consent', '1');
+    if($('setCommon').checked) fd.append('common', '1');
     fd.append('open', document.querySelector('input[name="setOpen"]:checked').value);
 
     $('setSave').disabled = true;
