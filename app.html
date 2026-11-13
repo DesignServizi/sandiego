@@ -1140,6 +1140,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   let queue = [];   // { file, url, state: 'wait'|'busy'|'done'|'err', el }
   let sending = false;
+  const MAX_PICK = 5;   // foto in attesa al massimo (il server ne accetta 20 all'ora)
+  let limitMsg = '';    // messaggio del server quando il limite orario e' pieno
 
   // una sola fotocamera: quella dentro la pagina (la stessa dell'apertura
   // automatica). Il selettore del telefono resta solo come ripiego
@@ -1164,8 +1166,14 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     // un giro concluso: la coda riparte vuota
     if(queue.length && queue.every(q => q.state === 'done')) clearQueue();
 
+    // massimo MAX_PICK foto in attesa: le raffiche mandano in errore GitHub Pages
+    let room = MAX_PICK - queue.filter(q => q.state !== 'done').length;
+    let dropped = 0;
+
     Array.from(list).forEach(file => {
       if(!/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
+      if(room <= 0){ dropped++; return; }
+      room--;
 
       const item = { file: file, url: URL.createObjectURL(file), state: 'wait' };
       const el = document.createElement('div');
@@ -1186,8 +1194,9 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       $('queue').appendChild(el);
     });
 
-    $('upMsg').textContent = '';
-    $('upMsg').className = 'msg';
+    $('upMsg').textContent = dropped ? '⚠️ Massimo ' + MAX_PICK + ' foto alla volta: ' + dropped + ' non aggiunte. Invia queste, poi scegli le altre.' : '';
+    $('upMsg').className = dropped ? 'msg bad' : 'msg';
+    if(dropped && camStream) camToast('⚠️ Massimo ' + MAX_PICK + ' foto alla volta');
     refreshSend();
   }
 
@@ -1279,6 +1288,13 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           return true;
         }
 
+        if(j.limit){
+          // limite orario del server: inutile provare le altre
+          setState(item, 'err', 'Limite');
+          limitMsg = j.error;
+          return false;
+        }
+
         setState(item, 'err', j.error || 'Errore');
         return false;
       }catch(e){
@@ -1307,10 +1323,12 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     bar.firstElementChild.style.width = '0';
 
     let ok = 0;
+    limitMsg = '';
 
     for(let i = 0; i < todo.length; i++){
       if(await sendOne(todo[i])) ok++;
       bar.firstElementChild.style.width = ((i + 1) / todo.length * 100) + '%';
+      if(limitMsg) break;
     }
 
     sending = false;
@@ -1319,7 +1337,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     const failed = todo.length - ok;
     const msg = $('upMsg');
 
-    if(failed === 0){
+    if(limitMsg){
+      msg.className = 'msg bad';
+      msg.textContent = '⏳ ' + limitMsg + '.' + (ok ? ' Inviate ' + ok + '.' : '');
+    }else if(failed === 0){
       msg.className = 'msg ok';
       msg.textContent = '✅ ' + (ok === 1 ? 'Foto inviata' : ok + ' foto inviate') + '. Grazie!';
     }else{
