@@ -48,6 +48,17 @@
     will-change:transform;
   }
 
+  /* layout telefono: foto senza cornice che riempie lo schermo; la parte che
+     sborda (orizzontale su schermo verticale o viceversa) scorre piano */
+  .pan-img{
+    position:absolute;
+    top:0;
+    left:0;
+    background-size:cover;
+    background-position:center;
+    will-change:transform;
+  }
+
   /* layout 2: foto intera (nessun taglio) su sfondo sfocato della stessa immagine */
   .contain-wrap{ position:absolute; inset:0; }
 
@@ -953,6 +964,8 @@
   // 'cover' (pieno schermo nitido) resta piu' contenuto per non tagliare troppo il soggetto
   function runKenBurns(targets, durationMs){
     targets.forEach(t => {
+      if(t.mode === 'pan'){ runPan(t, durationMs); return; }
+
       const isBackdrop = t.mode === 'backdrop';
       const scale = isBackdrop
         ? 1.15 + Math.random() * 0.22
@@ -1038,6 +1051,79 @@
 
     return { wrap, inner, text };
   }
+
+  // --- Telefono: foto a tutto schermo che scorre -------------------------
+  //
+  // Su schermi piccoli e touch (o con ?mobile=1 per provarlo da computer)
+  // niente cornici, coppie o sfondi sfocati: la foto copre tutto lo schermo e
+  // il lato che sborda scorre da un capo all'altro mentre e' in onda
+  // (orizzontale su telefono verticale: da sinistra a destra; verticale su
+  // telefono orizzontale: dall'alto in basso). Gli schermi grandi restano
+  // come prima.
+  const FORCE_MOBILE = new URLSearchParams(location.search).get('mobile') === '1';
+
+  function isMobileView(){
+    if(FORCE_MOBILE) return true;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    return coarse && Math.min(window.innerWidth, window.innerHeight) < 768;
+  }
+
+  function buildMobile(layer, img){
+    const el = makeImgDiv('pan-img', img.url);
+    layer.appendChild(el);
+
+    const cap = applyCaption(layer, img.caption, 'caption--photo');
+    return { kenburns:[{ el, mode:'pan', aspect: img.aspect || 1 }], captions: cap ? [cap] : [] };
+  }
+
+  // dimensiona la foto perche' copra lo schermo e dice quanto sborda
+  function panGeometry(t){
+    const W = window.innerWidth, H = window.innerHeight;
+    let w, h;
+
+    if(t.aspect > W / H){ h = H; w = H * t.aspect; }
+    else{ w = W; h = W / t.aspect; }
+
+    t.el.style.width = Math.ceil(w) + 'px';
+    t.el.style.height = Math.ceil(h) + 'px';
+
+    return { dx: Math.max(0, w - W), dy: Math.max(0, h - H) };
+  }
+
+  let activePans = [];
+
+  // fermo un attimo all'inizio e alla fine, in mezzo lo scorrimento morbido;
+  // 'from' (0..1) serve a ripartire dallo stesso punto quando si gira il telefono
+  function runPan(t, durationMs, from){
+    const g = panGeometry(t);
+    const end = 'translate(' + (-g.dx) + 'px, ' + (-g.dy) + 'px)';
+
+    if(t.anim) t.anim.cancel();
+    t.anim = t.el.animate(
+      [
+        { transform:'translate(0px, 0px)', offset:0 },
+        { transform:'translate(0px, 0px)', offset:0.12, easing:'ease-in-out' },
+        { transform:end, offset:0.88 },
+        { transform:end, offset:1 }
+      ],
+      { duration: durationMs, fill:'forwards' }
+    );
+    if(from) t.anim.currentTime = from * durationMs;
+
+    t.durationMs = durationMs;
+    activePans = activePans.filter(p => p.el.isConnected && p !== t);
+    activePans.push(t);
+  }
+
+  // telefono girato a meta' foto: si rifanno le misure e si riparte dal punto
+  // in cui si era
+  window.addEventListener('resize', () => {
+    activePans = activePans.filter(p => p.el.isConnected);
+    activePans.forEach(p => {
+      const done = p.anim ? Math.min(1, (p.anim.currentTime || 0) / p.durationMs) : 0;
+      runPan(p, p.durationMs, done);
+    });
+  });
 
   function buildCover(layer, img){
     const el = makeImgDiv('cover-img', img.url);
@@ -1353,6 +1439,15 @@
       textBuilt.music = musicOf(item);
       textBuilt.fx = fxOf(item);
       return textBuilt;
+    }
+
+    if(isMobileView()){
+      nextIndex += 1;
+      const mob = buildMobile(layer, item);
+      mob.holdMs = holdOf(item);
+      mob.music = musicOf(item);
+      mob.fx = fxOf(item);
+      return mob;
     }
 
     // niente giro: dopo l'ultima non c'e' una compagna
