@@ -950,7 +950,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       if(!blob) return;
 
       const name = 'scatto_' + Date.now() + '.jpg';
-      addFiles([new File([blob], name, { type: 'image/jpeg' })]);
+      addFiles([new File([blob], name, { type: 'image/jpeg' })], true);
       camShots++;
 
       if($('consent').checked){
@@ -1140,7 +1140,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   let queue = [];   // { file, url, state: 'wait'|'busy'|'done'|'err', el }
   let sending = false;
-  const MAX_PICK = 5;   // foto in attesa al massimo (il server ne accetta 20 all'ora)
+  const MAX_PICK = 5;   // foto della galleria in attesa al massimo (il server ne accetta 20 all'ora); gli scatti dall'app non contano
   let limitMsg = '';    // messaggio del server quando il limite orario e' pieno
 
   // una sola fotocamera: quella dentro la pagina (la stessa dell'apertura
@@ -1152,7 +1152,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   ['camInput', 'galInput'].forEach(id => {
     $(id).addEventListener('change', e => {
-      addFiles(e.target.files);
+      addFiles(e.target.files, id === 'camInput');
       e.target.value = '';
     });
   });
@@ -1162,20 +1162,23 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     refreshSend();
   });
 
-  function addFiles(list){
+  function addFiles(list, fromCam){
     // un giro concluso: la coda riparte vuota
     if(queue.length && queue.every(q => q.state === 'done')) clearQueue();
 
-    // massimo MAX_PICK foto in attesa: le raffiche mandano in errore GitHub Pages
-    let room = MAX_PICK - queue.filter(q => q.state !== 'done').length;
+    // massimo MAX_PICK foto della galleria in attesa: le raffiche mandano in
+    // errore GitHub Pages. Gli scatti fatti dall'app non hanno limiti
+    let room = MAX_PICK - queue.filter(q => q.state !== 'done' && !q.cam).length;
     let dropped = 0;
 
     Array.from(list).forEach(file => {
       if(!/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
-      if(room <= 0){ dropped++; return; }
-      room--;
+      if(!fromCam){
+        if(room <= 0){ dropped++; return; }
+        room--;
+      }
 
-      const item = { file: file, url: URL.createObjectURL(file), state: 'wait' };
+      const item = { file: file, url: URL.createObjectURL(file), state: 'wait', cam: !!fromCam };
       const el = document.createElement('div');
 
       el.className = 'qItem';
@@ -1196,7 +1199,6 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     $('upMsg').textContent = dropped ? '⚠️ Massimo ' + MAX_PICK + ' foto alla volta: ' + dropped + ' non aggiunte. Invia queste, poi scegli le altre.' : '';
     $('upMsg').className = dropped ? 'msg bad' : 'msg';
-    if(dropped && camStream) camToast('⚠️ Massimo ' + MAX_PICK + ' foto alla volta');
     refreshSend();
   }
 
@@ -1276,6 +1278,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     fd.append('a', 'upload');
     fd.append('u', code);
     fd.append('photo', ready.blob, ready.name);
+    if(item.cam) fd.append('src', 'cam');   // scatto dall'app: niente limite orario
 
     // un secondo tentativo: in sala la rete va e viene
     for(let attempt = 1; attempt <= 2; attempt++){
