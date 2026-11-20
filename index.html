@@ -638,6 +638,15 @@
   //   assente     la diapositiva non tocca la musica in corso
   //   'x.mp3'     da qui parte questa traccia, sfumando la precedente
   //   '-'         da qui la musica si spegne
+  // video dei delegati (app.html, dal 20/11/2026): stanno sul server in
+  // videos/<codice>/, non su GitHub. Senza audio e al massimo 30 s: vanno in
+  // scena interi e la diapositiva dopo parte quando finiscono. VIDEO_CAP_MS e'
+  // la rete di sicurezza se un video non finisce mai (rete ferma)
+  const VIDEO_BASE = LIVE_HOST + 'videos/';
+  const VIDEO_CAP_MS = 45000;
+  const VIDEO_STALL_MS = 10000;   // fermo a zero per tanto: si passa oltre
+  const isVideoName = n => /\.(mp4|mov|webm)$/i.test(n || '');
+
   const MUSIC_BASE = LIVE_HOST + 'music/';
   const MUSIC_STOP = '-';
   const MUSIC_FADE_MS = 2000;
@@ -710,7 +719,7 @@
   }
 
   async function preloadItem(item){
-    if(item.type === 'text') return;
+    if(item.type === 'text' || item.type === 'video') return;
 
     const ok = await loadItemOnce(item);
 
@@ -773,7 +782,8 @@
   async function fetchFromServer(){
     for(const base of [LIVE_HOST]){
       try{
-        const res = await fetch(fresh(base + 'list.php' + (USER_Q ? '?' + USER_Q : '')), { cache: 'no-store' });
+        // v=1: questa pagina sa mostrare i video, list.php li aggiunge
+        const res = await fetch(fresh(base + 'list.php' + (USER_Q ? '?' + USER_Q + '&v=1' : '')), { cache: 'no-store' });
 
         if(!res.ok) continue;
 
@@ -788,6 +798,12 @@
     }
 
     return null;
+  }
+
+  function videoItem(name, file, entry){
+    const url = (file && file.url) || (VIDEO_BASE + name.split('/').map(encodeURIComponent).join('/'));
+    return { type: 'video', name: name, url: url, poster: (file && file.poster) || null,
+             music: entry && entry.music, fx: entry && entry.fx, inOrdine: !!entry };
   }
 
   async function fetchImages(){
@@ -844,6 +860,12 @@
         playlist.push({ type: 'text', text: entry.text || '', duration: entry.duration, music: entry.music, bg: entry.bg, fx: entry.fx });
         return;
       }
+      if(entry && typeof entry === 'object' && entry.type === 'video' && byName[entry.name]){
+        used.add(entry.name);
+        if(entry.off) return;
+        playlist.push(videoItem(entry.name, byName[entry.name], entry));
+        return;
+      }
       if(entry && typeof entry === 'object' && entry.type === 'photo' && byName[entry.name]){
         // la foto esclusa resta sul repository e nell'ordine, ma qui la salto.
         // Va comunque segnata come "usata", altrimenti finirebbe in coda
@@ -867,6 +889,10 @@
 
     Object.keys(byName).forEach(name => {
       if(!used.has(name)){
+        if(byName[name].video || isVideoName(name)){
+          playlist.push(videoItem(name, byName[name]));
+          return;
+        }
         playlist.push({ type: 'photo', name: name, urls: photoUrls(name), url: photoUrls(name)[0], caption: parseCaption(byName[name].name) });
       }
     });
@@ -1438,6 +1464,76 @@
     return built;
   }
 
+  // video a tutto schermo, intero (contain) su nero, muto. L'elemento e'
+  // quello gia' scaldato da warmItem se c'e', cosi' non si riscarica.
+  // holdMs qui vale solo per ken burns/didascalie (non ce ne sono): quando
+  // passare alla diapositiva dopo lo decide scheduleNext, alla fine del video
+  function buildVideoSlide(layer, item){
+    const box = document.createElement('div');
+    box.style.cssText = 'position:absolute;inset:0;background:#000;overflow:hidden;';
+
+    let v = item.warm && item.warm.el && item.warm.src === item.url ? item.warm.el : null;
+    if(!v){
+      v = document.createElement('video');
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.src = item.url;
+    }
+    v.setAttribute('muted', '');
+    v.setAttribute('playsinline', '');
+    v.loop = false;
+    v.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;';
+
+    box.appendChild(v);
+    layer.appendChild(box);
+
+    try{ v.currentTime = 0; }catch(e){}
+    const p = v.play();
+    if(p && p.catch) p.catch(() => {});
+
+    return { kenburns: [], captions: [], holdMs: VIDEO_CAP_MS, video: v, skipEffect: true };
+  }
+
+  // quando passare alla diapositiva successiva. Foto e testi: dopo holdMs.
+  // Video: quando finisce (o va in errore, o resta fermo, o supera il tetto).
+  // slideToken scarta i segnali di un video gia' uscito di scena
+  let slideToken = 0;
+
+  function scheduleNext(built, holdMs){
+    const token = ++slideToken;
+
+    if(!built.video){
+      slideTimer = setTimeout(nextSlide, holdMs);
+      return;
+    }
+
+    const v = built.video;
+    let gone = false;
+    const go = () => {
+      if(gone || token !== slideToken || slideTimer === null) return;
+      gone = true;
+      clearTimeout(slideTimer);
+      clearInterval(stall);
+      slideTimer = setTimeout(nextSlide, 0);
+    };
+
+    slideTimer = setTimeout(go, VIDEO_CAP_MS);
+
+    const started = Date.now();
+    const stall = setInterval(() => {
+      if(token !== slideToken){ clearInterval(stall); return; }
+      if(v.currentTime > 0.2){ clearInterval(stall); return; }
+      if(Date.now() - started > VIDEO_STALL_MS){ showNotice('Video fermo, passo oltre'); go(); }
+    }, 1000);
+
+    v.addEventListener('ended', go, { once: true });
+    v.addEventListener('error', () => { showNotice('Video non riproducibile, passo oltre'); setTimeout(go, 1500); }, { once: true });
+
+    if(v.ended) go();
+    else if(v.paused){ const p = v.play(); if(p && p.catch) p.catch(() => {}); }
+  }
+
   function fillLayerBuild(layer){
     layer.innerHTML = '';
 
@@ -1462,6 +1558,14 @@
       textBuilt.music = musicOf(item);
       textBuilt.fx = fxOf(item);
       return textBuilt;
+    }
+
+    if(item.type === 'video'){
+      nextIndex += 1;
+      const vb = buildVideoSlide(layer, item);
+      vb.music = musicOf(item);
+      vb.fx = fxOf(item);
+      return vb;
     }
 
     if(isMobileView()){
@@ -1917,6 +2021,13 @@
     // (photoUrls lo attacca con & al proxy e con ? a raw)
     const bust = attempt > 1 ? '&cb=' + Date.now() : '';
 
+    // video appena inviato dall'app: sta gia' sul server, niente da precaricare
+    if(isVideoName(name)){
+      images.push(videoItem(name, null));
+      showNotice('Nuovo video' + (uploader ? ' di ' + uploader : '') + ': in coda allo slideshow');
+      return;
+    }
+
     const item = {
       type: 'photo',
       name: name,
@@ -2063,7 +2174,27 @@
   const WARM_BEHIND = 2;       // e quante indietro (quella in scena, e la sua compagna di coppia)
   const WARM_WAIT_MS = 700;    // oltre questa attesa si va in scena lo stesso
 
+  // video: si comincia a scaricarlo prima che vada in scena (fino a quando
+  // puo' partire), l'elemento poi passa a buildVideoSlide
+  function warmVideo(item){
+    if(item.warm && item.warm.src === item.url) return item.warm.ready;
+
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    const ready = new Promise(resolve => {
+      v.addEventListener('canplay', resolve, { once: true });
+      v.addEventListener('error', resolve, { once: true });
+    });
+    v.src = item.url;
+
+    item.warm = { el: v, src: item.url, ready: ready };
+    return ready;
+  }
+
   function warmItem(item){
+    if(item && item.type === 'video' && item.url) return warmVideo(item);
     if(!item || item.type !== 'photo' || !item.url) return Promise.resolve();
 
     // gia' calda per questo indirizzo: niente da rifare (l'indirizzo puo'
@@ -2085,7 +2216,12 @@
   }
 
   function coolItem(item){
-    if(item) item.warm = null;
+    if(!item) return;
+    // video fuori dalla finestra: si ferma lo scaricamento (se non e' in scena)
+    if(item.type === 'video' && item.warm && item.warm.el && !item.warm.el.isConnected){
+      try{ item.warm.el.removeAttribute('src'); item.warm.el.load(); }catch(e){}
+    }
+    item.warm = null;
   }
 
   // scalda le prossime, lascia andare le altre
@@ -2127,7 +2263,7 @@
     revealCaptions(built.captions, holdMs + TRANSITION_MS);
     updateSlideTag(built);
     warmWindow(nextIndex);
-    slideTimer = setTimeout(nextSlide, holdMs);
+    scheduleNext(built, holdMs);
   }
 
   async function nextSlide(){
@@ -2200,7 +2336,11 @@
     updateSlideTag(built);
 
     current = 1 - current;
-    slideTimer = setTimeout(nextSlide, holdMs);
+
+    // il video uscito di scena non deve restare a girare dietro
+    outLayer.querySelectorAll('video').forEach(v => { try{ v.pause(); }catch(e){} });
+
+    scheduleNext(built, holdMs);
   }
 
   // chiude la proiezione e rimette la schermata iniziale: musica sfumata,
@@ -2214,8 +2354,11 @@
 
     applyMusic(MUSIC_STOP);
 
+    slideToken++;   // un video ancora in scena non deve far ripartire niente
+
     layers.forEach(l => {
       l.getAnimations().forEach(a => a.cancel());
+      l.querySelectorAll('video').forEach(v => { try{ v.pause(); }catch(e){} });
       l.innerHTML = '';
       l.style.opacity = 0;
       l.style.transform = 'none';
