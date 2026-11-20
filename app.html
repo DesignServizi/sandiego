@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<script>/* GitHub Pages non forza ancora https */if(location.protocol==='http:'&&location.hostname!=='localhost')location.replace('https:'+location.href.slice(5));</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>San Diego 2026 · Foto</title>
+<meta name="theme-color" content="#13294b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="San Diego 2026">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<!--
+  App dei delegati - Eternal Happiness Convention 2026, San Diego.
+
+  App del delegato: app.html?u=<codice> (i QR aprono index.html?u=, lo slideshow). Tre schede:
+    Slideshow   apre index.html?u=<codice> (foto comuni + foto del delegato)
+    Carica      scatta o sceglie foto e le invia nella cartella del delegato
+    Le mie foto le foto del delegato, che puo' eliminare
+
+  Questa pagina sta su GitHub Pages (solo statico): caricamenti, elenco e
+  cancellazioni li fa il server, www.amalfibelvedere.it/sandiego/api.php,
+  che tiene il token. Il conto alla rovescia di prima e' in countdown.html.
+-->
+
+<style>
+:root{
+  --navy:#13294b;
+  --navy-2:#1d3a66;
+  --gold:#c9a13b;
+  --lemon:#f2c230;
+  --sea:#2b7bb9;
+  --cream:#fbf7ee;
+  --card:#ffffff;
+  --ink:#1c2533;
+  --muted:#6b7686;
+  --line:#e6e0d2;
+  --ok:#1f8a4c;
+  --bad:#c0392b;
+  --tabbar:64px;
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html,body{ margin:0; }
+
+body{
+  background:var(--cream);
+  color:var(--ink);
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  min-height:100vh;
+  padding-bottom:calc(var(--tabbar) + env(safe-area-inset-bottom) + 16px);
+}
+
+/* ---------- testata ---------- */
+header{
+  background:linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%);
+  color:#fff;
+  padding:calc(14px + env(safe-area-inset-top)) 16px 18px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+
+header img{
+  width:64px; height:64px;
+  border-radius:50%;
+  border:2px solid var(--gold);
+  background:#fff;
+  flex:none;
+}
+
+header .t1{
+  font-size:13px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--lemon);
+}
+
+header .t2{
+  font-size:20px;
+  font-weight:700;
+  margin-top:2px;
+}
+
+header .who{
+  font-size:13px;
+  opacity:.75;
+  margin-top:4px;
+}
+
+main{
+  max-width:640px;
+  margin:0 auto;
+  padding:16px;
+}
+
+.card{
+  background:var(--card);
+  border-radius:18px;
+  padding:20px;
+  box-shadow:0 4px 18px rgba(19,41,75,.08);
+  margin-bottom:16px;
+}
+
+h2{
+  margin:0 0 6px;
+  font-size:20px;
+  color:var(--navy);
+}
+
+.lead{
+  margin:0 0 16px;
+  color:var(--muted);
+  line-height:1.5;
+  font-size:15px;
+}
+
+/* ---------- bottoni ---------- */
+.btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  width:100%;
+  min-height:56px;
+  padding:14px 18px;
+  border:none;
+  border-radius:16px;
+  font-size:18px;
+  font-weight:600;
+  text-decoration:none;
+  cursor:pointer;
+  font-family:inherit;
+}
+
+.btn-primary{ background:var(--navy); color:#fff; }
+.btn-gold{ background:var(--lemon); color:var(--navy); }
+.btn-outline{ background:#fff; color:var(--navy); border:2px solid var(--navy); }
+.btn-danger{ background:var(--bad); color:#fff; }
+.btn:disabled{ opacity:.45; cursor:default; }
+
+.btnRow{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+/* ---------- slideshow ---------- */
+.hero{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  aspect-ratio:4/3;
+  background:var(--navy) center/cover no-repeat;
+  margin-bottom:16px;
+}
+
+.hero::after{
+  content:"";
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(19,41,75,.85), rgba(19,41,75,0) 60%);
+}
+
+.hero .count{
+  position:absolute;
+  left:16px; bottom:14px;
+  color:#fff;
+  z-index:1;
+  font-size:15px;
+}
+
+.hero .count b{ font-size:28px; display:block; }
+
+/* ---------- carica ---------- */
+.queue{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:8px;
+  margin:16px 0;
+}
+
+.qItem{
+  position:relative;
+  aspect-ratio:1;
+  border-radius:12px;
+  overflow:hidden;
+  background:#ddd center/cover no-repeat;
+}
+
+.qItem .st{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px;
+  background:rgba(0,0,0,.25);
+  color:#fff;
+}
+
+.qItem.done .st{ background:rgba(31,138,76,.45); }
+.qItem.err .st{ background:rgba(192,57,43,.6); font-size:13px; padding:6px; text-align:center; }
+
+.qItem .rm{
+  position:absolute; top:4px; right:4px;
+  width:28px; height:28px;
+  border-radius:50%;
+  border:none;
+  background:rgba(0,0,0,.6);
+  color:#fff;
+  font-size:16px;
+  line-height:28px;
+  padding:0;
+}
+
+.consent{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  font-size:14px;
+  color:var(--muted);
+  line-height:1.45;
+  margin:12px 0 16px;
+}
+
+.consent input{ width:22px; height:22px; flex:none; margin-top:1px; accent-color:var(--navy); }
+
+details.info{ font-size:13px; color:var(--muted); line-height:1.5; margin-top:14px; }
+details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
+
+.progress{
+  height:10px;
+  border-radius:10px;
+  background:var(--line);
+  overflow:hidden;
+  margin-top:14px;
+}
+
+.progress div{
+  height:100%;
+  width:0;
+  background:linear-gradient(90deg, var(--sea), var(--lemon));
+  transition:width .3s;
+}
+
+.field{ display:block; margin:0 0 14px; }
+.field span{ display:block; font-size:14px; font-weight:600; color:var(--muted); margin-bottom:6px; }
+.field input, .field textarea{
+  width:100%; box-sizing:border-box; font:inherit; font-size:16px;
+  padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+  background:#fff; color:var(--ink); resize:vertical;
+}
+.field input:focus, .field textarea:focus{ outline:2px solid var(--sea); border-color:transparent; }
+.seg{ display:flex; gap:8px; flex-wrap:wrap; }
+.seg label{
+  flex:1 1 0; min-width:90px; display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:12px 8px; border:2px solid var(--line); border-radius:12px; font-weight:600;
+  color:var(--navy); cursor:pointer; font-size:15px;
+}
+.seg label:has(input:checked){ border-color:var(--navy); background:var(--cream); }
+.seg input{ accent-color:var(--navy); }
+#inst{
+  position:fixed; left:12px; right:12px; bottom:calc(var(--tabbar) + 12px + env(safe-area-inset-bottom));
+  z-index:40; background:#fff; border-radius:18px; box-shadow:0 12px 40px rgba(19,41,75,.3);
+  padding:14px; display:flex; gap:12px; align-items:flex-start; max-width:560px; margin:0 auto;
+}
+#inst.hidden{ display:none; }
+#inst img{ width:56px; height:56px; border-radius:14px; flex:none; }
+#inst .instBody{ display:flex; flex-direction:column; gap:4px; font-size:15px; color:var(--ink); }
+#inst .instBody span{ color:var(--muted); font-size:14px; line-height:1.4; }
+#inst .instBtns{ display:flex; gap:12px; align-items:center; margin-top:8px; }
+#inst .instBtns .btn{ width:auto; padding:10px 18px; margin:0; }
+#cam{ position:fixed; inset:0; z-index:60; background:#000; }
+#cam.hidden{ display:none; }
+#camVideo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+#camFlash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
+#camFlash.on{ opacity:.85; transition:none; }
+#camClose, #camFlip{
+  position:absolute; top:calc(16px + env(safe-area-inset-top)); width:48px; height:48px; border-radius:50%;
+  border:0; background:rgba(0,0,0,.45); color:#fff; font-size:22px; cursor:pointer;
+}
+#camClose{ left:16px; }
+#camFlip{ right:16px; }
+#camShot{
+  position:absolute; left:50%; bottom:calc(32px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  width:78px; height:78px; border-radius:50%; border:5px solid #fff; background:rgba(255,255,255,.35); cursor:pointer;
+}
+#camShot:active{ background:#fff; }
+#camToast{
+  position:absolute; left:50%; bottom:calc(128px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  background:rgba(0,0,0,.6); color:#fff; padding:8px 16px; border-radius:20px; font-size:15px;
+  white-space:nowrap; opacity:0; transition:opacity .3s;
+}
+#camToast.on{ opacity:1; }
+#quick{
+  position:fixed; inset:0; z-index:50; background:var(--navy);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;
+}
+#quick.hidden{ display:none; }
+#quickGo{
+  width:min(80vw,320px); aspect-ratio:1; border-radius:50%; border:0;
+  background:var(--lemon); color:var(--navy); font:inherit; font-size:24px; font-weight:700;
+  box-shadow:0 10px 40px rgba(0,0,0,.35); cursor:pointer;
+}
+#quickSkip{ background:none; border:0; color:#fff; opacity:.8; font:inherit; font-size:16px; text-decoration:underline; cursor:pointer; }
+.msg{ margin-top:12px; font-size:15px; text-align:center; min-height:1em; }
+.msg.ok{ color:var(--ok); }
+.msg.bad{ color:var(--bad); }
+
+/* ---------- le mie foto ---------- */
+.mineHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px;
+}
+
+.linkBtn{
+  background:none;
+  border:none;
+  color:var(--sea);
+  font-size:15px;
+  font-weight:600;
+  padding:6px 0;
+  font-family:inherit;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:6px;
+}
+
+.ph{
+  position:relative;
+  aspect-ratio:1;
+  border-radius:10px;
+  overflow:hidden;
+  background:#e9e4d8;
+  border:none;
+  padding:0;
+}
+
+.ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+
+.ph .tick{
+  position:absolute; top:6px; right:6px;
+  width:26px; height:26px;
+  border-radius:50%;
+  border:2px solid #fff;
+  background:rgba(0,0,0,.25);
+  color:#fff;
+  font-size:15px;
+  line-height:22px;
+  text-align:center;
+}
+
+.ph.sel{ outline:4px solid var(--bad); outline-offset:-4px; }
+.ph.sel .tick{ background:var(--bad); }
+.ph.sel .tick::before{ content:"✓"; }
+
+.empty{ text-align:center; color:var(--muted); padding:30px 10px; line-height:1.5; }
+
+.delBar{
+  position:fixed;
+  left:0; right:0;
+  bottom:calc(var(--tabbar) + env(safe-area-inset-bottom));
+  padding:10px 16px;
+  background:rgba(251,247,238,.96);
+  border-top:1px solid var(--line);
+  z-index:20;
+}
+
+.delBar .btn{ max-width:608px; margin:0 auto; }
+
+/* ---------- barra delle schede ---------- */
+nav{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  height:calc(var(--tabbar) + env(safe-area-inset-bottom));
+  padding-bottom:env(safe-area-inset-bottom);
+  background:#fff;
+  border-top:1px solid var(--line);
+  display:grid;
+  grid-template-columns:repeat(4, 1fr);
+  z-index:30;
+}
+
+nav button{
+  background:none;
+  border:none;
+  font-family:inherit;
+  font-size:12px;
+  color:var(--muted);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+}
+
+nav button .ic{ font-size:22px; line-height:1; }
+nav button{ min-width:0; white-space:nowrap; font-size:11.5px; }
+nav button[aria-selected="true"]{ color:var(--navy); font-weight:700; }
+nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
+
+.badge{
+  display:inline-block;
+  min-width:20px;
+  padding:1px 6px;
+  border-radius:10px;
+  background:var(--lemon);
+  color:var(--navy);
+  font-size:11px;
+  font-weight:700;
+}
+
+/* ---------- codice non valido ---------- */
+.gate{
+  max-width:480px;
+  margin:40px auto;
+  padding:16px;
+  text-align:center;
+}
+
+.gate img{ width:180px; border-radius:50%; }
+.gate h2{ margin-top:20px; }
+
+.hidden{ display:none !important; }
+
+/* finestra di conferma (niente confirm() del browser) */
+.modal{
+  position:fixed; inset:0;
+  background:rgba(19,41,75,.55);
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  z-index:50;
+  padding:16px;
+}
+
+.modal .box{
+  background:#fff;
+  border-radius:20px;
+  padding:22px;
+  width:100%;
+  max-width:480px;
+  margin-bottom:env(safe-area-inset-bottom);
+}
+
+.modal p{ margin:0 0 18px; font-size:17px; line-height:1.4; }
+</style>
+</head>
+<body>
+
+<!-- codice assente o sconosciuto -->
+<div id="inst" class="hidden" role="dialog" aria-label="Aggiungi alla Home">
+  <img src="icon-192.png" alt="">
+  <div class="instBody">
+    <b>Aggiungi l’app alla Home</b>
+    <span id="instText">Così la ritrovi con un tocco, come un’app.</span>
+    <div class="instBtns">
+      <button type="button" class="btn btn-primary" id="instGo">Aggiungi</button>
+      <button type="button" class="linkBtn" id="instNo">Non ora</button>
+    </div>
+  </div>
+</div>
+
+<div id="cam" class="hidden">
+  <video id="camVideo" autoplay muted playsinline></video>
+  <div id="camFlash"></div>
+  <button type="button" id="camClose" aria-label="Chiudi">✕</button>
+  <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
+  <div id="camToast"></div>
+  <button type="button" id="camShot" aria-label="Scatta"></button>
+</div>
+
+<div id="quick" class="hidden">
+  <button type="button" id="quickGo"></button>
+  <button type="button" id="quickSkip">Altre opzioni</button>
+</div>
+
+<div id="gate" class="gate hidden">
+  <img src="logo-app.jpg" alt="Eternal Happiness Convention 2026">
+  <h2 id="gateTitle">Apri il link del tuo QR code</h2>
+  <p class="lead" id="gateText">Questa pagina funziona solo dal QR code personale stampato sul tuo pass.</p>
+</div>
+
+<div id="app" class="hidden">
+
+  <header>
+    <img src="logo-app.jpg" alt="">
+    <div>
+      <div class="t1">Eternal Happiness</div>
+      <div class="t2">San Diego 2026</div>
+      <div class="who"><b id="whoCode"></b></div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- SLIDESHOW -->
+    <section id="tab-show" role="tabpanel">
+      <div class="hero" id="hero">
+        <div class="count"><b id="showCount">…</b>foto nello slideshow</div>
+      </div>
+      <div class="card">
+        <h2>I ricordi del congresso</h2>
+        <p class="lead">Le foto di tutti i fratelli più quelle che hai scattato tu, una dopo l'altra. Le foto che invii mentre lo guardi si aggiungono in coda.</p>
+        <a class="btn btn-primary" id="showLink" href="index.html">&#9654; Guarda lo slideshow</a>
+      </div>
+
+    </section>
+
+    <!-- OPZIONI -->
+    <section id="tab-opt" role="tabpanel" class="hidden">
+      <!-- quello che vede chi scansiona il tuo QR code: ogni codice ha i suoi -->
+      <div class="card">
+        <h2>Opzioni</h2>
+        <p class="lead">Nome e messaggio compaiono sotto il titolo, a chi apre il tuo QR code.</p>
+
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="setName" maxlength="80" placeholder="es. Cretella Family">
+        </label>
+
+        <label class="field">
+          <span>Messaggio</span>
+          <textarea id="setMsg" maxlength="300" rows="3" placeholder="es. The Cretella family thanks you for your love and hospitality."></textarea>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setAuto">
+          <span><b>Avvio automatico</b>: lo slideshow parte da solo, senza il pulsante «Avvia slideshow».</span>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setRec">
+          <span>Mostra il pulsante <b>Registra MP4</b> (solo da computer).</span>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setConsent">
+          <span>Spunta già la dichiarazione <b>«Dichiaro di avere i diritti…»</b> quando carico le foto.</span>
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" id="setCommon">
+          <span><b>Aggiungi foto comuni al termine</b>: dopo le tue foto lo slideshow mostra anche quelle comuni.</span>
+        </label>
+
+        <div class="field">
+          <span>Musica dello slideshow</span>
+          <div id="musicNow" class="lead" style="margin:0 0 8px">Nessuna musica</div>
+          <audio id="musicPrev" controls preload="none" class="hidden" style="width:100%;margin-bottom:8px"></audio>
+          <div class="btnRow">
+            <button class="btn btn-outline" id="musicPick" type="button">🎵 Scegli musica</button>
+            <button class="btn btn-outline" id="musicDel" type="button" disabled>Togli</button>
+          </div>
+          <input type="file" id="musicInput" accept="audio/*,.mp3,.m4a,.aac,.ogg,.wav" hidden>
+          <div class="msg" id="musicMsg"></div>
+        </div>
+
+        <div class="field">
+          <span>All'apertura dell'app</span>
+          <div class="seg" role="radiogroup">
+            <label><input type="radio" name="setOpen" value="camera"> 📷 Scatta</label>
+            <label><input type="radio" name="setOpen" value="gallery"> 🖼 Galleria</label>
+            <label><input type="radio" name="setOpen" value="choice" checked> Scelta</label>
+          </div>
+        </div>
+
+        <button class="btn btn-gold" id="setSave" type="button">Salva</button>
+
+        <button class="btn btn-outline hidden" id="instOpt" type="button" style="margin-top:12px">📲 Aggiungi l’app alla Home</button>
+        <div class="msg" id="setMsgOut"></div>
+      </div>
+    </section>
+
+    <!-- CARICA -->
+    <section id="tab-up" role="tabpanel" class="hidden">
+      <div class="card">
+        <h2>Invia le tue foto</h2>
+        <p class="lead">Scatta o scegli le foto dalla galleria: finiscono nel tuo slideshow personale.</p>
+
+        <div class="btnRow">
+          <button class="btn btn-gold" id="camBtn" type="button">📷 Scatta</button>
+          <button class="btn btn-outline" id="galBtn" type="button">🖼 Galleria</button>
+        </div>
+        <p class="lead" id="galHint" style="margin:8px 0 0;font-size:.9em">ℹ️ Dalla galleria puoi scegliere al massimo 5 foto alla volta (e 20 all'ora). Le foto scattate con l'app non hanno limiti.</p>
+
+        <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
+        <input type="file" id="galInput" accept="image/*" multiple hidden>
+
+        <div class="queue" id="queue"></div>
+
+        <label class="consent">
+          <input type="checkbox" id="consent">
+          <span>Dichiaro di avere i diritti sulle foto che invio e accetto l'informativa qui sotto.</span>
+        </label>
+
+        <button class="btn btn-primary" id="sendBtn" type="button" disabled>Invia le foto</button>
+
+        <div class="progress hidden" id="progress"><div></div></div>
+        <div class="msg" id="upMsg"></div>
+
+        <details class="info">
+          <summary>Informativa</summary>
+          <p>Le foto che invii vengono salvate nella raccolta fotografica della <b>San Diego Convention 2026 – Amalfi Belvedere – Eternal Happiness</b> e mostrate nel tuo slideshow personale, che può vedere chiunque abbia il link del tuo QR code. Le foto vengono ridotte di dimensione prima dell'invio.</p>
+          <p>Inviandole dichiari di possedere i diritti necessari sulle immagini. Puoi eliminarle in qualsiasi momento dalla scheda «Le mie foto».</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- LE MIE FOTO -->
+    <section id="tab-mine" role="tabpanel" class="hidden">
+      <div class="card">
+        <div class="mineHead">
+          <h2 style="margin:0">Le mie foto <span class="badge" id="mineBadge">0</span></h2>
+          <button class="linkBtn" id="selAllBtn" type="button">Seleziona tutte</button>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="empty hidden" id="mineEmpty">Non hai ancora inviato foto.<br>Usa la scheda «Carica».</div>
+        <div class="msg" id="mineMsg"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="delBar hidden" id="delBar">
+    <button class="btn btn-danger" id="delBtn" type="button">🗑 Elimina selezionate</button>
+  </div>
+
+  <nav role="tablist">
+    <button role="tab" data-tab="show" aria-selected="true" type="button"><span class="ic">▶</span>Slideshow</button>
+    <button role="tab" data-tab="up" aria-selected="false" type="button"><span class="ic">📷</span>Carica</button>
+    <button role="tab" data-tab="mine" aria-selected="false" type="button"><span class="ic">🖼</span>Le mie foto</button>
+    <button role="tab" data-tab="opt" aria-selected="false" type="button"><span class="ic">⚙️</span>Opzioni</button>
+  </nav>
+
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="box">
+    <p id="modalText"></p>
+    <div class="btnRow">
+      <button class="btn btn-outline" id="modalNo" type="button">Annulla</button>
+      <button class="btn btn-danger" id="modalYes" type="button">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  const API = 'https://www.amalfibelvedere.it/sandiego/';
+
+  // le foto del telefono pesano 3-8 MB: prima di inviarle si riducono a
+  // questo lato lungo. Al congresso la rete e' quella che e', e per uno
+  // slideshow 2560 px sono piu' che abbastanza
+  const MAX_SIDE = 2560;
+  const JPEG_QUALITY = 0.85;
+
+  const $ = id => document.getElementById(id);
+
+  // dall'icona sulla Home l'app si apre senza ?u=: il codice e' quello
+  // ricordato all'ultima apertura dal link personale
+  let savedCode = '';
+  try{ savedCode = localStorage.getItem('sd-code') || ''; }catch(e){}
+  const code = ((new URLSearchParams(location.search).get('u') || '').trim() || savedCode).toLowerCase();
+
+  // ------------------------------------------------------ impostazioni
+  // nome, messaggio, avvio automatico e "Registra MP4" dello slideshow di
+  // questo codice: stanno sul server (api.php, data/settings_<codice>.json)
+
+  // in testata il nome scelto in Opzioni; finche' non c'e', il codice
+  function showWho(name){
+    $('whoCode').textContent = (name || '').trim() || code;
+  }
+
+  async function loadSettings(){
+    try{
+      const r = await fetch(API + 'api.php?a=settings&u=' + encodeURIComponent(code), { cache:'no-store' });
+      const j = await r.json();
+      if(!j.success) return;
+      $('setName').value  = j.settings.name || '';
+      $('setMsg').value   = j.settings.message || '';
+      $('setAuto').checked = !!j.settings.autostart;
+      $('setRec').checked  = !!j.settings.rec;
+      showWho(j.settings.name);
+      $('setConsent').checked = !!j.settings.consent;
+      $('setCommon').checked = !!j.settings.common;
+      showMusic(j.settings);
+
+      const open = ['camera', 'gallery'].includes(j.settings.open) ? j.settings.open : 'choice';
+      document.querySelector('input[name="setOpen"][value="' + open + '"]').checked = true;
+
+      return j.settings;
+    }catch(e){}
+
+    return null;
+  }
+
+  // all'apertura: dichiarazione gia' spuntata e, se scelto, fotocamera o
+  // galleria subito (dietro il tocco che il browser pretende)
+  function applyOpening(st){
+    if(!st) return;
+
+    if(st.consent){
+      $('consent').checked = true;
+      refreshSend();
+    }
+
+    if(st.open === 'camera'){
+      openCam();
+    }else if(st.open === 'gallery'){
+      $('quickGo').innerHTML = '🖼<br>Galleria<br><small style="font-size:.45em;font-weight:400">massimo 5 foto alla volta</small>';
+      $('quickGo').onclick = () => {
+        $('quick').classList.add('hidden');
+        $('galInput').click();
+      };
+      $('quick').classList.remove('hidden');
+    }
+  }
+
+  $('quickSkip').addEventListener('click', () => $('quick').classList.add('hidden'));
+
+  // --------------------------------------------- aggiungi alla Home
+  // Android/Chrome: il browser lascia proporre l'installazione (beforeinstallprompt)
+  // e la finestra vera la apre lui, dopo il nostro tocco su "Aggiungi".
+  // iPhone/Safari: nessuna richiesta automatica possibile, solo istruzioni.
+  // Il riquadro esce da solo una volta; poi resta il pulsante in Opzioni
+
+  let installEvt = null;
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    installEvt = e;
+    $('instOpt').classList.remove('hidden');
+    maybeAskInstall();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    $('inst').classList.add('hidden');
+    $('instOpt').classList.add('hidden');
+  });
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  let installReady = false;
+
+  function setupInstall(){
+    installReady = true;
+    if(isStandalone()) return;
+    if(isIOS()) $('instOpt').classList.remove('hidden');
+    maybeAskInstall();
+  }
+
+  function maybeAskInstall(){
+    if(!installReady || isStandalone()) return;
+
+    let asked = false;
+    try{ asked = localStorage.getItem('sd-install-asked') === '1'; }catch(e){}
+    if(asked) return;
+
+    if(installEvt || isIOS()) showInstall();
+  }
+
+  function showInstall(){
+    if(isIOS() && !installEvt){
+      $('instText').innerHTML = 'Tocca <b>Condividi</b> <span aria-hidden="true">⎙</span> in basso e poi <b>«Aggiungi alla schermata Home»</b>.';
+      $('instGo').textContent = 'Ho capito';
+    }
+    $('inst').classList.remove('hidden');
+  }
+
+  function closeInstall(){
+    $('inst').classList.add('hidden');
+    try{ localStorage.setItem('sd-install-asked', '1'); }catch(e){}
+  }
+
+  $('instGo').addEventListener('click', async () => {
+    if(installEvt){
+      installEvt.prompt();
+      try{ await installEvt.userChoice; }catch(e){}
+      installEvt = null;
+    }
+    closeInstall();
+  });
+
+  $('instNo').addEventListener('click', closeInstall);
+  $('instOpt').addEventListener('click', showInstall);
+
+  // ------------------------------------------------------ fotocamera
+
+  let camStream = null;
+  let camFacing = 'environment';
+  let camShots = 0;
+
+  // Telefono girato in orizzontale. Se lo schermo non ruota (blocco rotazione
+  // del telefono, o app installata) il flusso della fotocamera resta verticale
+  // e la foto uscirebbe coricata. Il giroscopio dice come e' tenuto davvero il
+  // telefono: allo scatto si ruota la foto di quanto il telefono e' girato
+  // rispetto allo schermo. Se lo schermo ha gia' ruotato la differenza e' 0.
+  // devRot = gradi in senso antiorario (stessa convenzione di screen.orientation.angle)
+  let devRot = 0;
+  let devSeen = false;   // arrivato almeno un dato dal giroscopio
+  let motionAsk = null;  // iPhone: richiesta di permesso in corso
+
+  function onDevOrient(e){
+    if(e.beta == null || e.gamma == null) return;
+    devSeen = true;
+    const b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
+    // direzione "su" vista nel piano dello schermo (x a destra, y verso l'alto)
+    const ux = -Math.cos(b) * Math.sin(g);
+    const uy = Math.sin(b);
+    // telefono quasi piatto: si tiene l'ultimo valore buono
+    if(Math.hypot(ux, uy) < 0.45) return;
+    if(Math.abs(ux) > Math.abs(uy) * 1.2) devRot = ux > 0 ? 90 : 270;
+    else if(Math.abs(uy) > Math.abs(ux) * 1.2) devRot = uy > 0 ? 0 : 180;
+    // nella zona di mezzo (circa 45 gradi) resta la scelta precedente
+  }
+
+  window.addEventListener('deviceorientation', onDevOrient);
+
+  // iPhone: il giroscopio va chiesto dentro un tocco. Si chiede al primo tocco
+  // qualsiasi sulla pagina, cosi' quando si scatta e' gia' attivo
+  if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function'){
+    const askMotion = () => {
+      document.removeEventListener('pointerdown', askMotion, true);
+      motionAsk = DeviceOrientationEvent.requestPermission().catch(() => {});
+    };
+    document.addEventListener('pointerdown', askMotion, true);
+  }
+
+  // di quanto ruotare lo scatto. Non si usa l'angolo dello schermo (iPhone e
+  // Android non lo contano allo stesso modo): basta confrontare il fotogramma
+  // col modo in cui e' tenuto il telefono. Fotogramma gia' orizzontale col
+  // telefono in orizzontale = lo schermo ha ruotato da solo, niente da fare.
+  function shotTurn(vw, vh){
+    const frameLandscape = vw > vh;
+    let t = devRot;
+    if((t === 90 || t === 270) && frameLandscape) return 0;
+    if((t === 0 || t === 180) && frameLandscape) return 0;   // caso strano: non si tocca
+    // frontale: stesso verso della posteriore (provato su telefono 01/11/2026:
+    // invertirlo la faceva uscire sottosopra)
+    return t;
+  }
+  let toastTimer = null;
+
+  function camToast(text){
+    const t = $('camToast');
+    t.textContent = text;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+  }
+
+  function stopCam(){
+    if(camStream) camStream.getTracks().forEach(tr => tr.stop());
+    camStream = null;
+  }
+
+  async function openCam(keepCount){
+    stopCam();
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      return false;   // browser vecchio: si ripiega sul selettore del telefono
+    }
+
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: camFacing }, width: { ideal: 4096 }, height: { ideal: 3072 } }
+      });
+    }catch(e){
+      // permesso negato o fotocamera occupata: si resta su Carica
+      $('upMsg').className = 'msg bad';
+      $('upMsg').textContent = 'Fotocamera non disponibile: consenti l’accesso alla fotocamera nelle impostazioni del browser.';
+      return false;
+    }
+
+    $('camVideo').srcObject = camStream;
+    $('cam').classList.remove('hidden');
+    if(!keepCount) camShots = 0;
+    return true;
+  }
+
+  // Android: ruotando lo schermo a fotocamera aperta, la frontale continua a
+  // mandare i fotogrammi con l'orientamento di prima e l'anteprima esce
+  // sottosopra (visto dall'utente 01/11/2026). Riaprire la fotocamera dopo la
+  // rotazione le fa prendere l'orientamento nuovo
+  let camRotTimer = null;
+
+  function camAfterRotate(){
+    if(!camStream) return;
+    clearTimeout(camRotTimer);
+    camRotTimer = setTimeout(() => { if(camStream) openCam(true); }, 350);
+  }
+
+  if(screen.orientation && screen.orientation.addEventListener){
+    screen.orientation.addEventListener('change', camAfterRotate);
+  }else{
+    window.addEventListener('orientationchange', camAfterRotate);
+  }
+
+  function closeCam(){
+    stopCam();
+    $('cam').classList.add('hidden');
+  }
+
+  $('camClose').addEventListener('click', closeCam);
+
+  $('camFlip').addEventListener('click', () => {
+    camFacing = camFacing === 'environment' ? 'user' : 'environment';
+    openCam();
+  });
+
+  // il mirino non resta acceso col telefono in tasca o su un'altra app
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden && camStream) closeCam();
+  });
+
+  $('camShot').addEventListener('click', async () => {
+    const v = $('camVideo');
+    if(!camStream || !v.videoWidth) return;
+
+    // iPhone con la fotocamera aperta subito: il primo tocco e' proprio lo
+    // scatto, quindi il permesso del giroscopio e' appena stato chiesto.
+    // Si aspetta il primo dato (al massimo 400 ms) per non coricare la foto
+    if(motionAsk && !devSeen){
+      await motionAsk;
+      for(let i = 0; i < 8 && !devSeen; i++) await new Promise(r => setTimeout(r, 50));
+    }
+
+    const vw = v.videoWidth, vh = v.videoHeight;
+    // 0, 90, 180, 270 in senso antiorario
+    const turn = shotTurn(vw, vh);
+    const side = turn === 90 || turn === 270;
+
+    const c = document.createElement('canvas');
+    c.width  = side ? vh : vw;
+    c.height = side ? vw : vh;
+
+    const ctx = c.getContext('2d');
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate(-turn * Math.PI / 180);   // telefono girato a sinistra = foto ruotata a sinistra
+    ctx.drawImage(v, -vw / 2, -vh / 2);
+
+    $('camFlash').classList.add('on');
+    requestAnimationFrame(() => requestAnimationFrame(() => $('camFlash').classList.remove('on')));
+
+    c.toBlob(blob => {
+      if(!blob) return;
+
+      const name = 'scatto_' + Date.now() + '.jpg';
+      addFiles([new File([blob], name, { type: 'image/jpeg' })], true);
+      camShots++;
+
+      if($('consent').checked){
+        camToast('Foto ' + camShots + ' · invio…');
+        sendAll();
+      }else{
+        camToast('Foto pronta: spunta la dichiarazione in Carica per inviarla');
+      }
+    }, 'image/jpeg', 0.92);
+  });
+
+  async function saveSettings(){
+    const out = $('setMsgOut');
+    const fd = new FormData();
+    fd.append('a', 'save');
+    fd.append('u', code);
+    fd.append('name', $('setName').value);
+    fd.append('message', $('setMsg').value);
+    if($('setAuto').checked) fd.append('autostart', '1');
+    if($('setRec').checked) fd.append('rec', '1');
+    if($('setConsent').checked) fd.append('consent', '1');
+    if($('setCommon').checked) fd.append('common', '1');
+    fd.append('open', document.querySelector('input[name="setOpen"]:checked').value);
+
+    $('setSave').disabled = true;
+    out.className = 'msg';
+    out.textContent = 'Salvo...';
+
+    try{
+      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+      const j = await r.json();
+      if(!j.success) throw new Error(j.error || 'errore');
+      out.className = 'msg ok';
+      out.textContent = 'Salvato ✓';
+      showWho(j.settings.name);
+    }catch(e){
+      out.className = 'msg bad';
+      out.textContent = 'Non salvato: ' + e.message;
+    }
+
+    $('setSave').disabled = false;
+  }
+
+  $('setSave').addEventListener('click', saveSettings);
+
+  // musica: si carica appena scelta, non serve "Salva". Suona a ripetizione
+  // nello slideshow e a fine proiezione sfuma
+  function showMusic(st){
+    const has = !!(st && st.music);
+    $('musicNow').textContent = has ? '🎵 ' + (st.musicTitle || st.music) : 'Nessuna musica';
+    $('musicDel').disabled = !has;
+    const prev = $('musicPrev');
+    prev.classList.toggle('hidden', !has);
+    if(has) prev.src = API + 'music/' + encodeURIComponent(st.music);
+    else prev.removeAttribute('src');
+  }
+
+  async function musicCall(fd, busyText){
+    const out = $('musicMsg');
+    out.className = 'msg';
+    out.textContent = busyText;
+    $('musicPick').disabled = true;
+    $('musicDel').disabled = true;
+
+    try{
+      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+      const j = await r.json();
+      if(!j.success) throw new Error(j.error || 'errore');
+      showMusic(j.settings);
+      out.className = 'msg ok';
+      out.textContent = 'Fatto ✓';
+    }catch(e){
+      out.className = 'msg bad';
+      out.textContent = 'Non riuscito: ' + e.message;
+      loadSettings();
+    }
+
+    $('musicPick').disabled = false;
+  }
+
+  $('musicPick').addEventListener('click', () => $('musicInput').click());
+
+  $('musicInput').addEventListener('change', e => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if(!f) return;
+
+    const fd = new FormData();
+    fd.append('a', 'music');
+    fd.append('u', code);
+    fd.append('music', f);
+    musicCall(fd, 'Carico la musica…');
+  });
+
+  $('musicDel').addEventListener('click', () => {
+    const fd = new FormData();
+    fd.append('a', 'music_del');
+    fd.append('u', code);
+    musicCall(fd, 'Tolgo la musica…');
+  });
+
+  // ------------------------------------------------------------ avvio
+
+  async function init(){
+    if(!code){
+      $('gate').classList.remove('hidden');
+      return;
+    }
+
+    let ok = false;
+
+    try{
+      const r = await fetch(API + 'api.php?a=check&u=' + encodeURIComponent(code), { cache:'no-store' });
+      ok = r.ok && (await r.json()).success;
+    }catch(e){
+      $('gateTitle').textContent = 'Connessione assente';
+      $('gateText').textContent = 'Controlla la rete e riapri la pagina.';
+      $('gate').classList.remove('hidden');
+      return;
+    }
+
+    if(!ok){
+      $('gateTitle').textContent = 'Codice non riconosciuto';
+      $('gate').classList.remove('hidden');
+      return;
+    }
+
+    $('whoCode').textContent = code;
+    try{ localStorage.setItem('sd-code', code); }catch(e){}
+    setupInstall();
+    $('showLink').href = 'index.html?u=' + encodeURIComponent(code);
+    $('app').classList.remove('hidden');
+
+    try{ $('consent').checked = localStorage.getItem('sd-consent') === '1'; }catch(e){}
+
+    // si apre sempre su Carica: e' quello che serve di piu' al congresso
+    showTab('up');
+
+    loadSettings().then(applyOpening);
+
+    loadShowCount();
+  }
+
+  // ------------------------------------------------------------ schede
+
+  function showTab(name){
+    document.querySelectorAll('nav button').forEach(b => {
+      b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false');
+    });
+
+    ['show', 'up', 'mine', 'opt'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== name));
+
+    try{ sessionStorage.setItem('sd-tab', name); }catch(e){}
+
+    if(name === 'mine') loadMine();
+    updateDelBar();
+    window.scrollTo(0, 0);
+  }
+
+  document.querySelectorAll('nav button').forEach(b => {
+    b.addEventListener('click', () => showTab(b.dataset.tab));
+  });
+
+  // ------------------------------------------------------------ slideshow
+
+  function thumb(name, w){
+    return API + 'img.php?f=' + encodeURIComponent(name) + '&w=' + (w || 320);
+  }
+
+  async function loadShowCount(){
+    try{
+      const r = await fetch(API + 'list.php?u=' + encodeURIComponent(code) + '&cb=' + Date.now(), { cache:'no-store' });
+      const data = await r.json();
+      const files = data.files || [];
+
+      $('showCount').textContent = files.length;
+
+      // in copertina l'ultima foto arrivata
+      if(files.length){
+        $('hero').style.backgroundImage = 'url("' + thumb(files[files.length - 1].name, 1280) + '")';
+      }
+    }catch(e){
+      $('showCount').textContent = '–';
+    }
+  }
+
+  // ------------------------------------------------------------ carica
+
+  let queue = [];   // { file, url, state: 'wait'|'busy'|'done'|'err', el }
+  let sending = false;
+  const MAX_PICK = 5;   // foto della galleria in attesa al massimo (il server ne accetta 20 all'ora); gli scatti dall'app non contano
+  let limitMsg = '';    // messaggio del server quando il limite orario e' pieno
+
+  // una sola fotocamera: quella dentro la pagina (la stessa dell'apertura
+  // automatica). Il selettore del telefono resta solo come ripiego
+  $('camBtn').addEventListener('click', async () => {
+    if(!(await openCam())) $('camInput').click();
+  });
+  $('galBtn').addEventListener('click', () => $('galInput').click());
+
+  ['camInput', 'galInput'].forEach(id => {
+    $(id).addEventListener('change', e => {
+      addFiles(e.target.files, id === 'camInput');
+      e.target.value = '';
+    });
+  });
+
+  $('consent').addEventListener('change', () => {
+    try{ localStorage.setItem('sd-consent', $('consent').checked ? '1' : '0'); }catch(e){}
+    refreshSend();
+  });
+
+  function addFiles(list, fromCam){
+    // un giro concluso: la coda riparte vuota
+    if(queue.length && queue.every(q => q.state === 'done')) clearQueue();
+
+    // massimo MAX_PICK foto della galleria in attesa: le raffiche mandano in
+    // errore GitHub Pages. Gli scatti fatti dall'app non hanno limiti
+    let room = MAX_PICK - queue.filter(q => q.state !== 'done' && !q.cam).length;
+    let dropped = 0;
+
+    Array.from(list).forEach(file => {
+      if(!/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
+      if(!fromCam){
+        if(room <= 0){ dropped++; return; }
+        room--;
+      }
+
+      const item = { file: file, url: URL.createObjectURL(file), state: 'wait', cam: !!fromCam };
+      const el = document.createElement('div');
+
+      el.className = 'qItem';
+      el.style.backgroundImage = 'url("' + item.url + '")';
+      el.innerHTML = '<button class="rm" type="button" aria-label="Togli">✕</button>';
+      el.querySelector('.rm').addEventListener('click', () => {
+        if(sending) return;
+        queue = queue.filter(q => q !== item);
+        URL.revokeObjectURL(item.url);
+        el.remove();
+        refreshSend();
+      });
+
+      item.el = el;
+      queue.push(item);
+      $('queue').appendChild(el);
+    });
+
+    $('upMsg').textContent = dropped ? '⚠️ Massimo ' + MAX_PICK + ' foto alla volta: ' + dropped + ' non aggiunte. Invia queste, poi scegli le altre.' : '';
+    $('upMsg').className = dropped ? 'msg bad' : 'msg';
+    refreshSend();
+  }
+
+  function clearQueue(){
+    queue.forEach(q => URL.revokeObjectURL(q.url));
+    queue = [];
+    $('queue').innerHTML = '';
+    $('progress').classList.add('hidden');
+  }
+
+  function refreshSend(){
+    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err').length;
+
+    $('sendBtn').disabled = sending || !todo || !$('consent').checked;
+    $('sendBtn').textContent = sending ? 'Invio in corso…'
+      : todo ? 'Invia ' + todo + ' foto'
+      : 'Invia le foto';
+  }
+
+  function setState(item, state, text){
+    item.state = state;
+    item.el.className = 'qItem' + (state === 'done' ? ' done' : state === 'err' ? ' err' : '');
+
+    let st = item.el.querySelector('.st');
+    if(!st){
+      st = document.createElement('div');
+      st.className = 'st';
+      item.el.appendChild(st);
+    }
+
+    st.textContent = state === 'busy' ? '⏳' : state === 'done' ? '✓' : state === 'err' ? (text || 'Errore') : '';
+
+    const rm = item.el.querySelector('.rm');
+    if(rm) rm.classList.toggle('hidden', state !== 'wait' && state !== 'err');
+  }
+
+  // riduce la foto nel browser e la riporta in JPEG. Il browser applica gia'
+  // l'orientamento EXIF quando disegna l'immagine, quindi le verticali
+  // restano verticali; se qualcosa va storto si manda l'originale
+  function loadImage(url){
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = url;
+    });
+  }
+
+  async function shrink(item){
+    try{
+      const im = await loadImage(item.url);
+      const scale = Math.min(1, MAX_SIDE / Math.max(im.naturalWidth, im.naturalHeight));
+      const w = Math.round(im.naturalWidth * scale);
+      const h = Math.round(im.naturalHeight * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(im, 0, 0, w, h);
+
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', JPEG_QUALITY));
+
+      if(blob && blob.size) return { blob: blob, name: 'foto.jpg' };
+    }catch(e){
+      // formato che il browser non sa disegnare: si prova con l'originale
+    }
+
+    return { blob: item.file, name: item.file.name };
+  }
+
+  async function sendOne(item){
+    setState(item, 'busy');
+
+    const ready = await shrink(item);
+    const fd = new FormData();
+
+    fd.append('a', 'upload');
+    fd.append('u', code);
+    fd.append('photo', ready.blob, ready.name);
+    if(item.cam) fd.append('src', 'cam');   // scatto dall'app: niente limite orario
+
+    // un secondo tentativo: in sala la rete va e viene
+    for(let attempt = 1; attempt <= 2; attempt++){
+      try{
+        const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+        const j = await r.json();
+
+        if(j.success){
+          setState(item, 'done');
+          return true;
+        }
+
+        if(j.limit){
+          // limite orario del server: inutile provare le altre
+          setState(item, 'err', 'Limite');
+          limitMsg = j.error;
+          return false;
+        }
+
+        setState(item, 'err', j.error || 'Errore');
+        return false;
+      }catch(e){
+        if(attempt === 2) setState(item, 'err', 'Rete assente');
+      }
+    }
+
+    return false;
+  }
+
+  let sendAgain = false;
+
+  $('sendBtn').addEventListener('click', () => sendAll());
+
+  async function sendAll(){
+    if(sending){ sendAgain = true; return; }
+
+    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err');
+    if(!todo.length) return;
+
+    sending = true;
+    refreshSend();
+
+    const bar = $('progress');
+    bar.classList.remove('hidden');
+    bar.firstElementChild.style.width = '0';
+
+    let ok = 0;
+    limitMsg = '';
+
+    for(let i = 0; i < todo.length; i++){
+      if(await sendOne(todo[i])) ok++;
+      bar.firstElementChild.style.width = ((i + 1) / todo.length * 100) + '%';
+      if(limitMsg) break;
+    }
+
+    sending = false;
+    refreshSend();
+
+    const failed = todo.length - ok;
+    const msg = $('upMsg');
+
+    if(limitMsg){
+      msg.className = 'msg bad';
+      msg.textContent = '⏳ ' + limitMsg + '.' + (ok ? ' Inviate ' + ok + '.' : '');
+    }else if(failed === 0){
+      msg.className = 'msg ok';
+      msg.textContent = '✅ ' + (ok === 1 ? 'Foto inviata' : ok + ' foto inviate') + '. Grazie!';
+    }else{
+      msg.className = 'msg bad';
+      msg.textContent = failed + ' non inviate: tocca di nuovo «Invia» per riprovare.';
+    }
+
+    mineLoaded = false;
+    loadShowCount();
+
+    if(camStream) camToast(failed === 0 ? '✅ Inviata' : '⚠️ ' + failed + ' non inviate');
+
+    if(sendAgain){
+      sendAgain = false;
+      sendAll();
+    }
+  }
+
+  // ------------------------------------------------------------ le mie foto
+
+  let mine = [];
+  let mineLoaded = false;
+  const selected = new Set();
+
+  async function loadMine(force){
+    if(mineLoaded && !force) return;
+
+    $('mineMsg').textContent = 'Carico…';
+    $('mineMsg').className = 'msg';
+
+    try{
+      const r = await fetch(API + 'api.php?a=mine&u=' + encodeURIComponent(code) + '&cb=' + Date.now(), { cache:'no-store' });
+      const j = await r.json();
+
+      if(!j.success) throw new Error(j.error || 'errore');
+
+      mine = j.files || [];
+      mineLoaded = true;
+      $('mineMsg').textContent = '';
+    }catch(e){
+      $('mineMsg').className = 'msg bad';
+      $('mineMsg').textContent = 'Impossibile leggere le tue foto. Riprova tra poco.';
+      return;
+    }
+
+    selected.clear();
+    renderMine();
+  }
+
+  function renderMine(){
+    const grid = $('grid');
+    grid.innerHTML = '';
+
+    $('mineBadge').textContent = mine.length;
+    $('mineEmpty').classList.toggle('hidden', mine.length > 0);
+    $('selAllBtn').classList.toggle('hidden', mine.length === 0);
+
+    mine.forEach(f => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ph' + (selected.has(f.file) ? ' sel' : '');
+      b.innerHTML = '<img loading="lazy" alt=""><span class="tick"></span>';
+      b.querySelector('img').src = thumb(f.name, 320);
+      b.addEventListener('click', () => {
+        if(selected.has(f.file)) selected.delete(f.file); else selected.add(f.file);
+        b.classList.toggle('sel', selected.has(f.file));
+        updateDelBar();
+      });
+      grid.appendChild(b);
+    });
+
+    updateDelBar();
+  }
+
+  function updateDelBar(){
+    const onMine = !$('tab-mine').classList.contains('hidden');
+    const n = selected.size;
+
+    $('delBar').classList.toggle('hidden', !onMine || n === 0);
+    $('delBtn').textContent = '🗑 Elimina ' + (n === 1 ? '1 foto' : n + ' foto');
+    $('selAllBtn').textContent = (n && n === mine.length) ? 'Deseleziona' : 'Seleziona tutte';
+  }
+
+  $('selAllBtn').addEventListener('click', () => {
+    if(selected.size === mine.length) selected.clear();
+    else mine.forEach(f => selected.add(f.file));
+    renderMine();
+  });
+
+  function ask(text){
+    return new Promise(resolve => {
+      $('modalText').textContent = text;
+      $('modal').classList.remove('hidden');
+
+      const done = v => {
+        $('modal').classList.add('hidden');
+        $('modalYes').onclick = $('modalNo').onclick = null;
+        resolve(v);
+      };
+
+      $('modalYes').onclick = () => done(true);
+      $('modalNo').onclick = () => done(false);
+    });
+  }
+
+  $('delBtn').addEventListener('click', async () => {
+    const n = selected.size;
+    if(!n) return;
+
+    if(!await ask('Eliminare ' + (n === 1 ? 'questa foto' : 'queste ' + n + ' foto') + '? Spariscono anche dallo slideshow.')) return;
+
+    const btn = $('delBtn');
+    btn.disabled = true;
+    btn.textContent = 'Elimino…';
+
+    const fd = new FormData();
+    fd.append('a', 'delete');
+    fd.append('u', code);
+    selected.forEach(f => fd.append('f[]', f));
+
+    try{
+      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
+      const j = await r.json();
+
+      if(!j.success){
+        $('mineMsg').className = 'msg bad';
+        $('mineMsg').textContent = (j.failed || []).length + ' foto non eliminate: riprova.';
+      }
+    }catch(e){
+      $('mineMsg').className = 'msg bad';
+      $('mineMsg').textContent = 'Rete assente: riprova.';
+    }
+
+    btn.disabled = false;
+    await loadMine(true);
+    loadShowCount();
+  });
+
+  init();
+
+})();
+</script>
+
+</body>
+</html>
