@@ -298,6 +298,39 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
   white-space:nowrap; opacity:0; transition:opacity .3s;
 }
 #camToast.on{ opacity:1; }
+/* video: scelta FOTO/VIDEO nel mirino, tasto rosso, contatore dei 30 s */
+#camMode{
+  position:absolute; left:50%; bottom:calc(124px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  display:flex; gap:6px; background:rgba(0,0,0,.45); border-radius:22px; padding:4px;
+}
+#camMode button{
+  border:0; background:none; color:#fff; font:inherit; font-size:14px; font-weight:700; letter-spacing:.08em;
+  padding:8px 16px; border-radius:18px; cursor:pointer;
+}
+#camMode button.on{ background:var(--lemon); color:var(--navy); }
+#camMode.busy{ opacity:.35; pointer-events:none; }
+#cam.video #camShot{ background:#e53935; }
+#cam.video.rec #camShot{ border-radius:22px; }
+#camTimer{
+  position:absolute; left:50%; top:calc(22px + env(safe-area-inset-top)); transform:translateX(-50%);
+  background:#e53935; color:#fff; font-weight:700; font-size:16px; padding:6px 14px; border-radius:16px;
+  font-variant-numeric:tabular-nums; display:none;
+}
+#cam.rec #camTimer{ display:block; }
+#cam.rec #camFlip, #cam.rec #camClose{ opacity:.35; pointer-events:none; }
+#cam.video #camToast{ bottom:calc(178px + env(safe-area-inset-bottom)); }
+@media (orientation:landscape) and (max-height:600px){
+  #camMode{ bottom:calc(16px + env(safe-area-inset-bottom)); }
+  #cam.video #camToast{ bottom:calc(72px + env(safe-area-inset-bottom)); }
+}
+.qItem video, .ph video{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; }
+.qItem .st{ z-index:1; }
+.qItem .rm{ z-index:2; }
+.vbadge{
+  position:absolute; left:6px; bottom:6px; z-index:1;
+  background:rgba(0,0,0,.6); color:#fff; font-size:12px; font-weight:700;
+  padding:2px 7px; border-radius:8px; pointer-events:none;
+}
 #quick{
   position:fixed; inset:0; z-index:50; background:var(--navy);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; padding:24px;
@@ -477,7 +510,12 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   <div id="camFlash"></div>
   <button type="button" id="camClose" aria-label="Chiudi">✕</button>
   <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
+  <div id="camTimer">0:00</div>
   <div id="camToast"></div>
+  <div id="camMode">
+    <button type="button" data-mode="photo">FOTO</button>
+    <button type="button" data-mode="video">VIDEO</button>
+  </div>
   <button type="button" id="camShot" aria-label="Scatta"></button>
 </div>
 
@@ -593,10 +631,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           <button class="btn btn-gold" id="camBtn" type="button">📷 Scatta</button>
           <button class="btn btn-outline" id="galBtn" type="button">🖼 Galleria</button>
         </div>
-        <p class="lead" id="galHint" style="margin:8px 0 0;font-size:.9em">ℹ️ Dalla galleria puoi scegliere al massimo 5 foto alla volta (e 20 all'ora). Le foto scattate con l'app non hanno limiti.</p>
+        <p class="lead" id="galHint" style="margin:8px 0 0;font-size:.9em">ℹ️ Dalla galleria puoi scegliere al massimo 5 foto alla volta (e 20 all'ora). Le foto scattate con l'app non hanno limiti. Video: al massimo 30 secondi, senza audio.</p>
 
         <input type="file" id="camInput" accept="image/*" capture="environment" hidden>
-        <input type="file" id="galInput" accept="image/*" multiple hidden>
+        <input type="file" id="vidInput" accept="video/*" capture="environment" hidden>
+        <input type="file" id="galInput" accept="image/*,video/*" multiple hidden>
 
         <div class="queue" id="queue"></div>
 
@@ -808,6 +847,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   let camFacing = 'environment';
   let camShots = 0;
 
+  // FOTO o VIDEO: l'ultima scelta resta ricordata sul telefono
+  let camMode = 'photo';
+  try{ if(localStorage.getItem('sd-mode') === 'video') camMode = 'video'; }catch(e){}
+
   // Telefono girato in orizzontale. Se lo schermo non ruota (blocco rotazione
   // del telefono, o app installata) il flusso della fotocamera resta verticale
   // e la foto uscirebbe coricata. Il giroscopio dice come e' tenuto davvero il
@@ -879,10 +922,16 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       return false;   // browser vecchio: si ripiega sul selettore del telefono
     }
 
+    // foto: la risoluzione piu' alta; video: Full HD, che basta allo
+    // slideshow e tiene i file leggeri (30 s a 5 Mbps = circa 19 MB)
+    const size = camMode === 'video'
+      ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
+      : { width: { ideal: 4096 }, height: { ideal: 3072 } };
+
     try{
       camStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: { ideal: camFacing }, width: { ideal: 4096 }, height: { ideal: 3072 } }
+        video: Object.assign({ facingMode: { ideal: camFacing } }, size)
       });
     }catch(e){
       // permesso negato o fotocamera occupata: si resta su Carica
@@ -893,8 +942,15 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     $('camVideo').srcObject = camStream;
     $('cam').classList.remove('hidden');
+    showMode();
     if(!keepCount) camShots = 0;
     return true;
+  }
+
+  function showMode(){
+    document.querySelectorAll('#camMode button').forEach(b => b.classList.toggle('on', b.dataset.mode === camMode));
+    $('cam').classList.toggle('video', camMode === 'video');
+    $('camShot').setAttribute('aria-label', camMode === 'video' ? 'Registra' : 'Scatta');
   }
 
   // Android: ruotando lo schermo a fotocamera aperta, la frontale continua a
@@ -904,9 +960,9 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   let camRotTimer = null;
 
   function camAfterRotate(){
-    if(!camStream) return;
+    if(!camStream || recorder) return;   // durante un video non si riapre
     clearTimeout(camRotTimer);
-    camRotTimer = setTimeout(() => { if(camStream) openCam(true); }, 350);
+    camRotTimer = setTimeout(() => { if(camStream && !recorder) openCam(true); }, 350);
   }
 
   if(screen.orientation && screen.orientation.addEventListener){
@@ -916,6 +972,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   }
 
   function closeCam(){
+    stopRec();   // un video in corso si chiude e parte l'invio
     stopCam();
     $('cam').classList.add('hidden');
   }
@@ -927,12 +984,29 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     openCam();
   });
 
+  document.querySelectorAll('#camMode button').forEach(b => {
+    b.addEventListener('click', () => {
+      if(recorder || camMode === b.dataset.mode) return;
+      camMode = b.dataset.mode;
+      try{ localStorage.setItem('sd-mode', camMode); }catch(e){}
+      openCam(true);
+    });
+  });
+
   // il mirino non resta acceso col telefono in tasca o su un'altra app
   document.addEventListener('visibilitychange', () => {
     if(document.hidden && camStream) closeCam();
   });
 
-  $('camShot').addEventListener('click', async () => {
+  $('camShot').addEventListener('click', () => {
+    if(camMode === 'video'){
+      if(recorder) stopRec(); else startRec();
+    }else{
+      takePhoto();
+    }
+  });
+
+  async function takePhoto(){
     const v = $('camVideo');
     if(!camStream || !v.videoWidth) return;
 
@@ -975,7 +1049,130 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
         camToast('Foto pronta: spunta la dichiarazione in Carica per inviarla');
       }
     }, 'image/jpeg', 0.92);
-  });
+  }
+
+  // ------------------------------------------------------ video
+  // senza audio, al massimo VIDEO_MAX_SEC secondi (decisione dell'utente
+  // 20/11/2026). Stesso sistema del cantiere: MediaRecorder sul flusso della
+  // fotocamera, o su un canvas ruotato se il telefono e' girato e lo schermo no
+
+  const VIDEO_MAX_SEC = 30;
+  const VIDEO_BITRATE = 5000000;
+
+  let recorder = null;
+  let recChunks = [];
+  let recMime = '';
+  let recRaf = 0;
+  let recTick = null;
+  let recStart = 0;
+
+  function pickVideoMime(){
+    if(!window.MediaRecorder) return null;
+    const list = ['video/mp4;codecs=avc1.42E01E', 'video/mp4;codecs=avc1', 'video/mp4',
+                  'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+    for(const m of list){
+      try{ if(MediaRecorder.isTypeSupported(m)) return m; }catch(e){}
+    }
+    return '';
+  }
+
+  async function startRec(){
+    const v = $('camVideo');
+    if(!camStream || !v.videoWidth || recorder) return;
+
+    const mime = pickVideoMime();
+
+    // browser senza registratore: la telecamera del telefono
+    if(mime === null){
+      closeCam();
+      $('vidInput').click();
+      return;
+    }
+
+    if(motionAsk && !devSeen){
+      await motionAsk;
+      for(let i = 0; i < 8 && !devSeen; i++) await new Promise(r => setTimeout(r, 50));
+    }
+
+    const vw = v.videoWidth, vh = v.videoHeight;
+    const turn = shotTurn(vw, vh);
+    let stream = camStream;
+
+    if(turn !== 0){
+      const c = document.createElement('canvas');
+      if(c.captureStream){
+        const side = turn === 90 || turn === 270;
+        const scale = Math.min(1, 1920 / Math.max(vw, vh));
+        const sw = Math.round(vw * scale), sh = Math.round(vh * scale);
+        c.width  = side ? sh : sw;
+        c.height = side ? sw : sh;
+        const ctx = c.getContext('2d');
+        const draw = () => {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.translate(c.width / 2, c.height / 2);
+          ctx.rotate(-turn * Math.PI / 180);
+          ctx.drawImage(v, -sw / 2, -sh / 2, sw, sh);
+          recRaf = requestAnimationFrame(draw);
+        };
+        draw();
+        stream = c.captureStream(30);
+      }
+    }
+
+    try{
+      const opts = { videoBitsPerSecond: VIDEO_BITRATE };
+      if(mime) opts.mimeType = mime;
+      recorder = new MediaRecorder(stream, opts);
+    }catch(e){
+      cancelAnimationFrame(recRaf);
+      recorder = null;
+      camToast('Registrazione non disponibile');
+      return;
+    }
+
+    recMime = recorder.mimeType || mime || 'video/webm';
+    recChunks = [];
+
+    recorder.ondataavailable = e => { if(e.data && e.data.size) recChunks.push(e.data); };
+    recorder.onstop = () => {
+      cancelAnimationFrame(recRaf);
+      const blob = new Blob(recChunks, { type: recMime.split(';')[0] });
+      recChunks = [];
+      if(!blob.size) return;
+
+      const ext = /mp4/.test(recMime) ? 'mp4' : 'webm';
+      addFiles([new File([blob], 'video_' + Date.now() + '.' + ext, { type: blob.type })], true);
+      camShots++;
+
+      if($('consent').checked){
+        if(camStream) camToast('Video ' + camShots + ' · invio…');
+        sendAll();
+      }else if(camStream){
+        camToast('Video pronto: spunta la dichiarazione in Carica per inviarlo');
+      }
+    };
+
+    recorder.start(1000);
+    recStart = Date.now();
+    $('cam').classList.add('rec');
+    $('camMode').classList.add('busy');
+    $('camTimer').textContent = '0:00 / 0:' + VIDEO_MAX_SEC;
+
+    recTick = setInterval(() => {
+      const s = Math.floor((Date.now() - recStart) / 1000);
+      $('camTimer').textContent = '0:' + String(Math.min(s, VIDEO_MAX_SEC)).padStart(2, '0') + ' / 0:' + VIDEO_MAX_SEC;
+      if(s >= VIDEO_MAX_SEC) stopRec();
+    }, 250);
+  }
+
+  function stopRec(){
+    if(!recorder) return;
+    clearInterval(recTick);
+    try{ if(recorder.state !== 'inactive') recorder.stop(); }catch(e){}
+    recorder = null;
+    $('cam').classList.remove('rec');
+    $('camMode').classList.remove('busy');
+  }
 
   async function saveSettings(){
     const out = $('setMsgOut');
@@ -1143,9 +1340,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
       $('showCount').textContent = files.length;
 
-      // in copertina l'ultima foto arrivata
-      if(files.length){
-        $('hero').style.backgroundImage = 'url("' + thumb(files[files.length - 1].name, 1280) + '")';
+      // in copertina l'ultima foto arrivata (i video non passano da img.php)
+      const photos = files.filter(f => !f.video);
+      if(photos.length){
+        $('hero').style.backgroundImage = 'url("' + thumb(photos[photos.length - 1].name, 1280) + '")';
       }
     }catch(e){
       $('showCount').textContent = '–';
@@ -1162,16 +1360,18 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   // una sola fotocamera: quella dentro la pagina (la stessa dell'apertura
   // automatica). Il selettore del telefono resta solo come ripiego
   $('camBtn').addEventListener('click', async () => {
-    if(!(await openCam())) $('camInput').click();
+    if(!(await openCam())) $(camMode === 'video' ? 'vidInput' : 'camInput').click();
   });
   $('galBtn').addEventListener('click', () => $('galInput').click());
 
-  ['camInput', 'galInput'].forEach(id => {
+  ['camInput', 'vidInput', 'galInput'].forEach(id => {
     $(id).addEventListener('change', e => {
-      addFiles(e.target.files, id === 'camInput');
+      addFiles(e.target.files, id !== 'galInput');
       e.target.value = '';
     });
   });
+
+  const isVideoFile = f => /^video\//.test(f.type) || /\.(mp4|mov|webm|m4v)$/i.test(f.name);
 
   $('consent').addEventListener('change', () => {
     try{ localStorage.setItem('sd-consent', $('consent').checked ? '1' : '0'); }catch(e){}
@@ -1184,22 +1384,39 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     // massimo MAX_PICK foto della galleria in attesa: le raffiche mandano in
     // errore GitHub Pages. Gli scatti fatti dall'app non hanno limiti
-    let room = MAX_PICK - queue.filter(q => q.state !== 'done' && !q.cam).length;
+    // i video non vanno su GitHub: non contano nel limite delle foto
+    let room = MAX_PICK - queue.filter(q => q.state !== 'done' && !q.cam && !q.video).length;
     let dropped = 0;
 
     Array.from(list).forEach(file => {
-      if(!/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
-      if(!fromCam){
+      const video = isVideoFile(file);
+      if(!video && !/^image\//.test(file.type) && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) return;
+      if(!fromCam && !video){
         if(room <= 0){ dropped++; return; }
         room--;
       }
 
-      const item = { file: file, url: URL.createObjectURL(file), state: 'wait', cam: !!fromCam };
+      const item = { file: file, url: URL.createObjectURL(file), state: 'wait', cam: !!fromCam, video: video };
       const el = document.createElement('div');
 
       el.className = 'qItem';
-      el.style.backgroundImage = 'url("' + item.url + '")';
-      el.innerHTML = '<button class="rm" type="button" aria-label="Togli">✕</button>';
+      if(video){
+        el.innerHTML = '<video muted playsinline preload="metadata"></video><span class="vbadge">▶ VIDEO</span><button class="rm" type="button" aria-label="Togli">✕</button>';
+        const vEl = el.querySelector('video');
+        vEl.src = item.url + '#t=0.5';
+        // dalla galleria puo' arrivare un video lungo: oltre i 30 s non parte
+        vEl.addEventListener('loadedmetadata', () => {
+          item.duration = vEl.duration;
+          if(vEl.duration > VIDEO_MAX_SEC + 1 && item.state === 'wait'){
+            item.tooLong = true;
+            setState(item, 'err', 'Più di ' + VIDEO_MAX_SEC + ' s');
+            refreshSend();
+          }
+        });
+      }else{
+        el.style.backgroundImage = 'url("' + item.url + '")';
+        el.innerHTML = '<button class="rm" type="button" aria-label="Togli">✕</button>';
+      }
       el.querySelector('.rm').addEventListener('click', () => {
         if(sending) return;
         queue = queue.filter(q => q !== item);
@@ -1225,12 +1442,22 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     $('progress').classList.add('hidden');
   }
 
-  function refreshSend(){
-    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err').length;
+  const pending = () => queue.filter(q => (q.state === 'wait' || q.state === 'err') && !q.tooLong);
 
-    $('sendBtn').disabled = sending || !todo || !$('consent').checked;
+  function countText(list){
+    const v = list.filter(q => q.video).length, p = list.length - v;
+    const parts = [];
+    if(p) parts.push(p + ' foto');
+    if(v) parts.push(v + ' video');
+    return parts.join(' e ');
+  }
+
+  function refreshSend(){
+    const todo = pending();
+
+    $('sendBtn').disabled = sending || !todo.length || !$('consent').checked;
     $('sendBtn').textContent = sending ? 'Invio in corso…'
-      : todo ? 'Invia ' + todo + ' foto'
+      : todo.length ? 'Invia ' + countText(todo)
       : 'Invia le foto';
   }
 
@@ -1285,8 +1512,110 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     return { blob: item.file, name: item.file.name };
   }
 
+  // ------------------------------------------------------ invio video
+  // a pezzi da VCHUNK verso vapi.php (il server non prende richieste oltre
+  // 150 MB e in sala la rete va e viene: ogni pezzo si ritenta, e se il
+  // server ne ha gia' una parte si riparte da li'). Poi l'anteprima jpg
+
+  const VCHUNK = 8 * 1024 * 1024;   // = VIDEO_CHUNK in videolib.php
+
+  function videoPoster(url){
+    return new Promise(resolve => {
+      const v = document.createElement('video');
+      let done = false;
+      const finish = blob => { if(done) return; done = true; v.removeAttribute('src'); v.load(); resolve(blob); };
+
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.addEventListener('loadeddata', () => {
+        try{ v.currentTime = Math.min(0.5, (v.duration || 1) / 2); }catch(e){ finish(null); }
+      });
+      v.addEventListener('seeked', () => {
+        try{
+          const scale = Math.min(1, 960 / Math.max(v.videoWidth, v.videoHeight));
+          const c = document.createElement('canvas');
+          c.width = Math.round(v.videoWidth * scale);
+          c.height = Math.round(v.videoHeight * scale);
+          if(!c.width || !c.height) return finish(null);
+          c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+          c.toBlob(b => finish(b), 'image/jpeg', 0.8);
+        }catch(e){ finish(null); }
+      });
+      v.addEventListener('error', () => finish(null));
+      setTimeout(() => finish(null), 8000);
+      v.src = url;
+    });
+  }
+
+  async function sendVideo(item){
+    const file = item.file;
+    if(file.size > 250 * 1024 * 1024){
+      setState(item, 'err', 'Video troppo grande');
+      return false;
+    }
+    const n = Math.max(1, Math.ceil(file.size / VCHUNK));
+    if(!item.vid) item.vid = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).replace(/[^a-z0-9]/g, '');
+
+    let i = 0, fails = 0, result = null;
+
+    while(i < n){
+      const fd = new FormData();
+      fd.append('a', 'chunk');
+      fd.append('u', code);
+      fd.append('id', item.vid);
+      fd.append('i', i);
+      fd.append('n', n);
+      fd.append('size', file.size);
+      fd.append('c', file.slice(i * VCHUNK, Math.min(file.size, (i + 1) * VCHUNK)), 'c');
+
+      try{
+        const r = await fetch(API + 'vapi.php', { method:'POST', body:fd });
+        const j = await r.json();
+
+        if(r.status === 409 && typeof j.have === 'number'){
+          i = Math.floor(j.have / VCHUNK);   // il server ne ha gia' una parte
+          continue;
+        }
+        if(!j.success){
+          setState(item, 'err', j.error || 'Errore');
+          return false;
+        }
+        fails = 0;
+        i++;
+        const st = item.el.querySelector('.st');
+        if(st && i < n) st.textContent = Math.round(i / n * 100) + '%';
+        if(i === n) result = j;
+      }catch(e){
+        if(++fails >= 4){
+          setState(item, 'err', 'Rete assente');
+          return false;
+        }
+        await new Promise(r => setTimeout(r, 2000 * fails));
+      }
+    }
+
+    // anteprima per galleria e pagina casa: se non riesce il video resta valido
+    try{
+      const poster = await videoPoster(item.url);
+      if(poster && result && result.file){
+        const fd = new FormData();
+        fd.append('a', 'poster');
+        fd.append('u', code);
+        fd.append('f', result.file);
+        fd.append('p', poster, 'poster.jpg');
+        await fetch(API + 'vapi.php', { method:'POST', body:fd });
+      }
+    }catch(e){}
+
+    setState(item, 'done');
+    return true;
+  }
+
   async function sendOne(item){
     setState(item, 'busy');
+
+    if(item.video) return sendVideo(item);
 
     const ready = await shrink(item);
     const fd = new FormData();
@@ -1331,7 +1660,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   async function sendAll(){
     if(sending){ sendAgain = true; return; }
 
-    const todo = queue.filter(q => q.state === 'wait' || q.state === 'err');
+    const todo = pending();
     if(!todo.length) return;
 
     sending = true;
@@ -1344,8 +1673,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     let ok = 0;
     limitMsg = '';
 
+    const sent = [];
+
     for(let i = 0; i < todo.length; i++){
-      if(await sendOne(todo[i])) ok++;
+      if(await sendOne(todo[i])){ ok++; sent.push(todo[i]); }
       bar.firstElementChild.style.width = ((i + 1) / todo.length * 100) + '%';
       if(limitMsg) break;
     }
@@ -1361,7 +1692,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       msg.textContent = '⏳ ' + limitMsg + '.' + (ok ? ' Inviate ' + ok + '.' : '');
     }else if(failed === 0){
       msg.className = 'msg ok';
-      msg.textContent = '✅ ' + (ok === 1 ? 'Foto inviata' : ok + ' foto inviate') + '. Grazie!';
+      msg.textContent = '✅ ' + (ok === 1 ? (sent[0].video ? 'Video inviato' : 'Foto inviata') : countText(sent) + (sent.some(q => q.video) ? ' inviati' : ' inviate')) + '. Grazie!';
     }else{
       msg.className = 'msg bad';
       msg.textContent = failed + ' non inviate: tocca di nuovo «Invia» per riprovare.';
@@ -1391,12 +1722,19 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     $('mineMsg').className = 'msg';
 
     try{
-      const r = await fetch(API + 'api.php?a=mine&u=' + encodeURIComponent(code) + '&cb=' + Date.now(), { cache:'no-store' });
+      const q = '?a=mine&u=' + encodeURIComponent(code) + '&cb=' + Date.now();
+      // i video stanno sul server (vapi.php): se quella richiesta non va, le
+      // foto si vedono comunque
+      const [r, vids] = await Promise.all([
+        fetch(API + 'api.php' + q, { cache:'no-store' }),
+        fetch(API + 'vapi.php' + q, { cache:'no-store' }).then(x => x.json()).then(x => x.success ? (x.files || []) : []).catch(() => [])
+      ]);
       const j = await r.json();
 
       if(!j.success) throw new Error(j.error || 'errore');
 
-      mine = j.files || [];
+      // tutti insieme, dal piu' recente (il nome comincia con data e ora)
+      mine = (j.files || []).concat(vids).sort((a, b) => b.file < a.file ? -1 : b.file > a.file ? 1 : 0);
       mineLoaded = true;
       $('mineMsg').textContent = '';
     }catch(e){
@@ -1421,8 +1759,15 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'ph' + (selected.has(f.file) ? ' sel' : '');
-      b.innerHTML = '<img loading="lazy" alt=""><span class="tick"></span>';
-      b.querySelector('img').src = thumb(f.name, 320);
+      if(f.video){
+        b.innerHTML = (f.poster ? '<img loading="lazy" alt="">' : '<video muted playsinline preload="metadata"></video>') +
+          '<span class="vbadge">▶ VIDEO</span><span class="tick"></span>';
+        if(f.poster) b.querySelector('img').src = f.poster;
+        else b.querySelector('video').src = f.url + '#t=0.5';
+      }else{
+        b.innerHTML = '<img loading="lazy" alt=""><span class="tick"></span>';
+        b.querySelector('img').src = thumb(f.name, 320);
+      }
       b.addEventListener('click', () => {
         if(selected.has(f.file)) selected.delete(f.file); else selected.add(f.file);
         b.classList.toggle('sel', selected.has(f.file));
@@ -1475,18 +1820,29 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     btn.disabled = true;
     btn.textContent = 'Elimino…';
 
-    const fd = new FormData();
-    fd.append('a', 'delete');
-    fd.append('u', code);
-    selected.forEach(f => fd.append('f[]', f));
+    // foto da api.php (GitHub), video da vapi.php (server)
+    const vidSet = new Set(mine.filter(f => f.video).map(f => f.file));
+    const groups = [
+      { url: 'api.php',  names: [...selected].filter(f => !vidSet.has(f)) },
+      { url: 'vapi.php', names: [...selected].filter(f => vidSet.has(f)) }
+    ].filter(g => g.names.length);
 
     try{
-      const r = await fetch(API + 'api.php', { method:'POST', body:fd });
-      const j = await r.json();
+      let failed = 0;
+      for(const g of groups){
+        const fd = new FormData();
+        fd.append('a', 'delete');
+        fd.append('u', code);
+        g.names.forEach(f => fd.append('f[]', f));
 
-      if(!j.success){
+        const r = await fetch(API + g.url, { method:'POST', body:fd });
+        const j = await r.json();
+        if(!j.success) failed += (j.failed || []).length || g.names.length;
+      }
+
+      if(failed){
         $('mineMsg').className = 'msg bad';
-        $('mineMsg').textContent = (j.failed || []).length + ' foto non eliminate: riprova.';
+        $('mineMsg').textContent = failed + ' non eliminate: riprova.';
       }
     }catch(e){
       $('mineMsg').className = 'msg bad';
