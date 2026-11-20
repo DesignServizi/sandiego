@@ -80,6 +80,20 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
   opacity:0; transition:opacity .4s;
 }
 .tile img.ok{ opacity:1; min-height:0; }
+/* video: anteprima con un ▶ disegnato sopra (non e' un pulsante: tutto il
+   mattoncino resta un solo tocco, come le foto) */
+.tile{ position:relative; }
+.tile video{ width:100%; height:auto; display:block; pointer-events:none; aspect-ratio:16/9; object-fit:cover; background:#000; }
+.tile .play{
+  position:absolute; left:50%; top:50%; width:54px; height:54px; margin:-27px 0 0 -27px;
+  border-radius:50%; background:rgba(0,0,0,.5); border:2px solid rgba(255,255,255,.85);
+  pointer-events:none;
+}
+.tile .play::after{
+  content:""; position:absolute; left:20px; top:15px;
+  border-style:solid; border-width:11px 0 11px 18px; border-color:transparent transparent transparent #fff;
+}
+.pane video{ max-width:100%; max-height:100%; display:block; pointer-events:none; }
 
 .empty, .err{ text-align:center; color:var(--muted); padding:60px 16px; font-size:16px; line-height:1.5; }
 
@@ -186,18 +200,25 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
     const used = new Set();
     const out = [];
 
+    const byName = {};
+    files.forEach(f => { byName[f.name] = f; });
+    const entry = n => {
+      const f = byName[n] || {};
+      return f.video ? { name: n, video: true, url: f.url, poster: f.poster || null } : { name: n };
+    };
+
     order.forEach(e => {
-      const name = typeof e === 'string' ? e : (e && e.type === 'photo' ? e.name : null);
+      const name = typeof e === 'string' ? e : (e && (e.type === 'photo' || e.type === 'video') ? e.name : null);
       if(!name || !known.has(name) || used.has(name)) return;
       used.add(name);
       if(e && e.off) return;
-      out.push(name);
+      out.push(entry(name));
     });
 
-    files.map(f => f.name)
-      .filter(n => !used.has(n) && /\.(jpe?g|png|webp|gif)$/i.test(n))
+    files.filter(f => !used.has(f.name) && (f.video || /\.(jpe?g|png|webp|gif)$/i.test(f.name)))
+      .map(f => f.name)
       .sort()
-      .forEach(n => out.push(n));
+      .forEach(n => out.push(entry(n)));
 
     return out;
   }
@@ -205,7 +226,8 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
   async function load(){
     let data;
     try{
-      const r = await fetch(HOST + 'list.php?' + (USER_Q ? USER_Q + '&' : '') + 'cb=' + Date.now(), { cache:'no-store' });
+      // v=1: questa pagina sa mostrare anche i video
+      const r = await fetch(HOST + 'list.php?' + (USER_Q ? USER_Q + '&v=1&' : '') + 'cb=' + Date.now(), { cache:'no-store' });
       data = await r.json();
     }catch(e){
       if(!items.length) $('main').innerHTML = '<div class="err">Impossibile caricare la galleria.<br>Controlla la connessione e ricarica la pagina.</div>';
@@ -213,12 +235,13 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
     }
 
     const list = playlist(data || {});
-    const key = list.join('|');
+    const key = list.map(it => it.name + (it.poster ? '+p' : '')).join('|');
     if(key === shownKey) return;
     shownKey = key;
     items = list;
 
-    $('sub').textContent = 'Galleria · ' + items.length + ' foto';
+    const nv = items.filter(it => it.video).length, np = items.length - nv;
+    $('sub').textContent = 'Galleria · ' + np + ' foto' + (nv ? ' · ' + nv + ' video' : '');
 
     const main = $('main');
     main.innerHTML = '';
@@ -231,19 +254,34 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
     const grid = document.createElement('div');
     grid.className = 'grid';
 
-    items.forEach((name, idx) => {
+    items.forEach((it, idx) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'tile';
-      b.setAttribute('aria-label', 'Foto ' + (idx + 1));
+      b.setAttribute('aria-label', (it.video ? 'Video ' : 'Foto ') + (idx + 1));
 
-      const im = document.createElement('img');
-      im.loading = 'lazy';
-      im.decoding = 'async';
-      im.alt = '';
-      im.onload = () => im.classList.add('ok');
-      im.src = img(name, 640);
-      b.appendChild(im);
+      if(it.video && !it.poster){
+        // anteprima non arrivata: il primo fotogramma del video
+        const v = document.createElement('video');
+        v.muted = true;
+        v.playsInline = true;
+        v.preload = 'metadata';
+        v.src = it.url + '#t=0.5';
+        b.appendChild(v);
+      }else{
+        const im = document.createElement('img');
+        im.loading = 'lazy';
+        im.decoding = 'async';
+        im.alt = '';
+        im.onload = () => im.classList.add('ok');
+        im.src = it.video ? it.poster : img(it.name, 640);
+        b.appendChild(im);
+      }
+      if(it.video){
+        const p = document.createElement('span');
+        p.className = 'play';
+        b.appendChild(p);
+      }
 
       b.addEventListener('click', () => open(idx));
       grid.appendChild(b);
@@ -259,13 +297,34 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
   const strip = $('strip');
   const panes = strip.querySelectorAll('.pane');
 
-  function fill(pane, i){
+  // centre = il pannello in vista: solo li' il video parte (muto, a ripetizione);
+  // ai lati del video basta l'anteprima
+  function fill(pane, i, centre){
+    pane.querySelectorAll('video').forEach(v => { try{ v.pause(); }catch(e){} });
     pane.innerHTML = '';
     if(i < 0 || i >= items.length) return;
-    const el = document.createElement('img');
-    el.alt = '';
-    el.draggable = false;
-    el.src = img(items[i], FULL_W);
+    const it = items[i];
+    let el;
+    if(it.video && (centre || !it.poster)){
+      el = document.createElement('video');
+      el.muted = true;
+      el.playsInline = true;
+      el.setAttribute('playsinline', '');
+      el.loop = true;
+      el.preload = centre ? 'auto' : 'metadata';
+      if(it.poster) el.poster = it.poster;
+      el.src = centre ? it.url : it.url + '#t=0.5';
+      if(centre){
+        el.autoplay = true;
+        const p = el.play();
+        if(p && p.catch) p.catch(() => {});
+      }
+    }else{
+      el = document.createElement('img');
+      el.alt = '';
+      el.draggable = false;
+      el.src = it.video ? it.poster : img(it.name, FULL_W);
+    }
     pane.appendChild(el);
   }
 
@@ -277,15 +336,15 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
   function show(i){
     if(i < 0 || i >= items.length) return;
     current = i;
-    fill(panes[0], i - 1);
-    fill(panes[1], i);
-    fill(panes[2], i + 1);
+    fill(panes[0], i - 1, false);
+    fill(panes[1], i, true);
+    fill(panes[2], i + 1, false);
     place(0, false);
     $('viewCount').textContent = (i + 1) + ' / ' + items.length;
     $('prev').classList.toggle('hidden', i === 0);
     $('next').classList.toggle('hidden', i === items.length - 1);
     // quella dopo ancora, gia' in arrivo
-    if(items[i + 2]) new Image().src = img(items[i + 2], FULL_W);
+    if(items[i + 2] && !items[i + 2].video) new Image().src = img(items[i + 2].name, FULL_W);
   }
 
   // durante lo scivolamento: a che foto si arriva, e il timer che ci porta
@@ -318,7 +377,7 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
   }
 
   function close(fromHistory){
-    panes.forEach(p => { p.innerHTML = ''; });
+    panes.forEach(p => { p.querySelectorAll('video').forEach(v => { try{ v.pause(); }catch(e){} }); p.innerHTML = ''; });
     $('view').classList.add('hidden');
     document.body.style.overflow = '';
     current = -1;
@@ -370,6 +429,8 @@ main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
     if(Math.abs(dx) > Math.min(80, w * 0.18)) go(dx < 0 ? 1 : -1);
     else place(0, true);
   }
+  // il trascinamento nativo dell'immagine annullerebbe lo swipe (pointercancel)
+  box.addEventListener('dragstart', e => e.preventDefault());
   box.addEventListener('pointerup', release);
   box.addEventListener('pointercancel', release);
 
