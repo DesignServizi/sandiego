@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<script>if(location.protocol==='http:'&&location.hostname!=='localhost')location.replace('https:'+location.href.slice(5));</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Galleria · San Diego 2026</title>
+<meta name="theme-color" content="#04121c">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<!--
+  Galleria del delegato (galleria.html?u=<codice>): le stesse foto dello
+  slideshow (list.php?u=, stesso ordine, diapositive di testo escluse) in
+  una griglia a mattoncini (masonry, colonne CSS). Sulle miniature nessun
+  pulsante o link: un tocco apre la foto a tutto schermo, dove si passa
+  alla successiva/precedente col dito, con le frecce o da tastiera.
+-->
+
+<style>
+:root{
+  --bg:#04121c;
+  --bg-2:#12324a;
+  --ink:#fff;
+  --muted:rgba(255,255,255,.6);
+  --line:rgba(255,255,255,.18);
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ margin:0; }
+body{
+  background:var(--bg);
+  background-image:radial-gradient(ellipse at top, var(--bg-2) 0%, var(--bg) 70%);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  min-height:100vh;
+}
+
+header{
+  position:sticky; top:0; z-index:5;
+  background:rgba(4,18,28,.88);
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+  display:flex; align-items:center; gap:12px;
+}
+header .t{ flex:1; min-width:0; }
+header h1{
+  margin:0; font-size:15px; font-weight:400;
+  letter-spacing:.12em; text-transform:uppercase;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+header .s{ font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+header a.go{
+  flex:none; color:#fff; text-decoration:none; font-size:14px;
+  padding:9px 14px; border-radius:40px;
+  border:1px solid rgba(255,255,255,.5);
+  background:rgba(255,255,255,.08);
+}
+
+main{ max-width:1500px; margin:0 auto; padding:12px 12px 32px; }
+
+/* mattoncini: ogni foto con le sue proporzioni, in colonne */
+.grid{ column-count:4; column-gap:10px; }
+@media (max-width:1100px){ .grid{ column-count:3; } }
+@media (max-width:700px){ .grid{ column-count:2; column-gap:6px; } }
+
+.tile{
+  display:block; width:100%; margin:0 0 10px; padding:0; border:0;
+  background:rgba(255,255,255,.06);
+  border-radius:10px; overflow:hidden; cursor:pointer;
+  break-inside:avoid; -webkit-column-break-inside:avoid;
+}
+@media (max-width:700px){ .tile{ margin-bottom:6px; border-radius:6px; } }
+.tile img{
+  width:100%; height:auto; display:block; pointer-events:none;
+  min-height:80px;
+  opacity:0; transition:opacity .4s;
+}
+.tile img.ok{ opacity:1; min-height:0; }
+
+.empty, .err{ text-align:center; color:var(--muted); padding:60px 16px; font-size:16px; line-height:1.5; }
+
+/* ------------------------------------------------- a tutto schermo */
+#view{
+  position:fixed; inset:0; z-index:20;
+  background:#000;
+  display:flex; flex-direction:column;
+}
+#view.hidden{ display:none; }
+#viewTop{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+  color:#fff;
+}
+#viewCount{ font-size:14px; opacity:.7; font-variant-numeric:tabular-nums; }
+#viewClose{
+  border:0; cursor:pointer; font:inherit; font-size:18px;
+  border-radius:10px; padding:7px 13px;
+  background:rgba(255,255,255,.15); color:#fff;
+}
+#viewBox{
+  position:relative; flex:1; min-height:0; overflow:hidden;
+  touch-action:none;
+}
+#strip{
+  position:absolute; inset:0;
+  display:flex;
+  will-change:transform;
+}
+#strip.anim{ transition:transform .28s ease-out; }
+.pane{
+  flex:none; width:100%; height:100%;
+  display:flex; align-items:center; justify-content:center;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.pane img{ max-width:100%; max-height:100%; object-fit:contain; display:block; user-select:none; -webkit-user-drag:none; }
+.nav{
+  position:absolute; top:50%; transform:translateY(-50%); z-index:2;
+  width:48px; height:72px; border:0; cursor:pointer;
+  background:rgba(255,255,255,.12); color:#fff; font-size:28px;
+}
+#prev{ left:0; border-radius:0 12px 12px 0; }
+#next{ right:0; border-radius:12px 0 0 12px; }
+@media (hover:none){ .nav{ display:none; } }
+
+.hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="t">
+    <h1>Eternal Happiness · San Diego 2026</h1>
+    <div class="s" id="sub">Galleria</div>
+  </div>
+  <a class="go" id="goSlide" href="index.html">&#9654; Slideshow</a>
+</header>
+
+<main id="main">
+  <div class="empty">Caricamento…</div>
+</main>
+
+<div id="view" class="hidden" role="dialog" aria-modal="true" aria-label="Foto a tutto schermo">
+  <div id="viewTop">
+    <div id="viewCount"></div>
+    <button id="viewClose" type="button" aria-label="Chiudi">&#10005;</button>
+  </div>
+  <div id="viewBox">
+    <div id="strip">
+      <div class="pane"></div><div class="pane"></div><div class="pane"></div>
+    </div>
+    <button class="nav" id="prev" type="button" aria-label="Precedente">&#8249;</button>
+    <button class="nav" id="next" type="button" aria-label="Successiva">&#8250;</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  const $ = id => document.getElementById(id);
+
+  const HOST = 'https://www.amalfibelvedere.it/sandiego/';
+  const USER = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const USER_Q = USER ? 'u=' + encodeURIComponent(USER) : '';
+
+  const img = (name, w) => HOST + 'img.php?f=' + encodeURIComponent(name) + '&w=' + w;
+  const FULL_W = 1920;
+
+  if(USER_Q) $('goSlide').href = 'index.html?' + USER_Q;
+
+  let items = [];     // nomi delle foto, nell'ordine dello slideshow
+  let current = -1;
+  let shownKey = '';  // per non ridisegnare la griglia se non e' cambiato niente
+
+  // ----------------------------------------------------------- elenco
+
+  // stesso ordine dello slideshow: prima le voci 'photo' dell'ordine salvato
+  // (quelle messe da parte saltate), poi le foto mai ordinate, per nome
+  function playlist(data){
+    const files = Array.isArray(data.files) ? data.files : [];
+    const order = Array.isArray(data.order) ? data.order : [];
+    const known = new Set(files.map(f => f.name));
+    const used = new Set();
+    const out = [];
+
+    order.forEach(e => {
+      const name = typeof e === 'string' ? e : (e && e.type === 'photo' ? e.name : null);
+      if(!name || !known.has(name) || used.has(name)) return;
+      used.add(name);
+      if(e && e.off) return;
+      out.push(name);
+    });
+
+    files.map(f => f.name)
+      .filter(n => !used.has(n) && /\.(jpe?g|png|webp|gif)$/i.test(n))
+      .sort()
+      .forEach(n => out.push(n));
+
+    return out;
+  }
+
+  async function load(){
+    let data;
+    try{
+      const r = await fetch(HOST + 'list.php?' + (USER_Q ? USER_Q + '&' : '') + 'cb=' + Date.now(), { cache:'no-store' });
+      data = await r.json();
+    }catch(e){
+      if(!items.length) $('main').innerHTML = '<div class="err">Impossibile caricare la galleria.<br>Controlla la connessione e ricarica la pagina.</div>';
+      return;
+    }
+
+    const list = playlist(data || {});
+    const key = list.join('|');
+    if(key === shownKey) return;
+    shownKey = key;
+    items = list;
+
+    $('sub').textContent = 'Galleria · ' + items.length + ' foto';
+
+    const main = $('main');
+    main.innerHTML = '';
+
+    if(!items.length){
+      main.innerHTML = '<div class="empty">Ancora nessuna foto.</div>';
+      return;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+
+    items.forEach((name, idx) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tile';
+      b.setAttribute('aria-label', 'Foto ' + (idx + 1));
+
+      const im = document.createElement('img');
+      im.loading = 'lazy';
+      im.decoding = 'async';
+      im.alt = '';
+      im.onload = () => im.classList.add('ok');
+      im.src = img(name, 640);
+      b.appendChild(im);
+
+      b.addEventListener('click', () => open(idx));
+      grid.appendChild(b);
+    });
+
+    main.appendChild(grid);
+  }
+
+  // -------------------------------------------------- a tutto schermo
+  // tre pannelli affiancati (precedente, corrente, successiva): il dito
+  // trascina la striscia, al rilascio si scivola sul vicino o si torna
+
+  const strip = $('strip');
+  const panes = strip.querySelectorAll('.pane');
+
+  function fill(pane, i){
+    pane.innerHTML = '';
+    if(i < 0 || i >= items.length) return;
+    const el = document.createElement('img');
+    el.alt = '';
+    el.draggable = false;
+    el.src = img(items[i], FULL_W);
+    pane.appendChild(el);
+  }
+
+  function place(dx, animate){
+    strip.classList.toggle('anim', !!animate);
+    strip.style.transform = 'translateX(calc(-100% + ' + dx + 'px))';
+  }
+
+  function show(i){
+    if(i < 0 || i >= items.length) return;
+    current = i;
+    fill(panes[0], i - 1);
+    fill(panes[1], i);
+    fill(panes[2], i + 1);
+    place(0, false);
+    $('viewCount').textContent = (i + 1) + ' / ' + items.length;
+    $('prev').classList.toggle('hidden', i === 0);
+    $('next').classList.toggle('hidden', i === items.length - 1);
+    // quella dopo ancora, gia' in arrivo
+    if(items[i + 2]) new Image().src = img(items[i + 2], FULL_W);
+  }
+
+  // durante lo scivolamento: a che foto si arriva, e il timer che ci porta
+  let busy = false, busyTo = -1, busyTimer = null;
+
+  function settle(){
+    if(!busy) return;
+    clearTimeout(busyTimer);
+    busy = false;
+    show(busyTo);
+  }
+
+  function go(step){
+    // un tocco nuovo mentre la striscia scorre ancora non va perso:
+    // si chiude subito lo scivolamento in corso e si riparte da li'
+    settle();
+    const to = current + step;
+    if(to < 0 || to >= items.length){ place(0, true); return; }
+    busy = true;
+    busyTo = to;
+    place(-step * $('viewBox').clientWidth, true);
+    busyTimer = setTimeout(settle, 290);
+  }
+
+  function open(i){
+    $('view').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    show(i);
+    if(location.hash !== '#foto') history.pushState({ v: 1 }, '', '#foto');
+  }
+
+  function close(fromHistory){
+    panes.forEach(p => { p.innerHTML = ''; });
+    $('view').classList.add('hidden');
+    document.body.style.overflow = '';
+    current = -1;
+    if(!fromHistory && location.hash === '#foto') history.back();
+  }
+
+  $('prev').addEventListener('click', () => go(-1));
+  $('next').addEventListener('click', () => go(1));
+  $('viewClose').addEventListener('click', () => close(false));
+
+  // il tasto indietro del telefono chiude la foto invece di uscire
+  window.addEventListener('popstate', () => { if(current >= 0) close(true); });
+
+  document.addEventListener('keydown', e => {
+    if(current < 0) return;
+    if(e.key === 'Escape') close(false);
+    else if(e.key === 'ArrowLeft') go(-1);
+    else if(e.key === 'ArrowRight') go(1);
+  });
+
+  // trascinamento col dito (o col mouse)
+  let x0 = null, y0 = 0, dx = 0, horiz = null;
+  const box = $('viewBox');
+
+  box.addEventListener('pointerdown', e => {
+    if(e.target.closest('.nav')) return;
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    settle();
+    x0 = e.clientX; y0 = e.clientY; dx = 0; horiz = null;
+    box.setPointerCapture(e.pointerId);
+  });
+
+  box.addEventListener('pointermove', e => {
+    if(x0 === null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if(horiz === null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) horiz = Math.abs(mx) > Math.abs(my);
+    if(!horiz) return;
+    dx = mx;
+    // ai bordi la striscia fa resistenza
+    if((current === 0 && dx > 0) || (current === items.length - 1 && dx < 0)) dx /= 3;
+    place(dx, false);
+  });
+
+  function release(){
+    if(x0 === null) return;
+    x0 = null;
+    if(!horiz) return;
+    const w = box.clientWidth;
+    if(Math.abs(dx) > Math.min(80, w * 0.18)) go(dx < 0 ? 1 : -1);
+    else place(0, true);
+  }
+  box.addEventListener('pointerup', release);
+  box.addEventListener('pointercancel', release);
+
+  // girando il telefono la striscia va rimessa a posto
+  window.addEventListener('resize', () => { if(current >= 0 && !busy) place(0, false); });
+
+  // tornando sulla pagina, le foto nuove
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && current < 0) load();
+  });
+
+  if(location.hash === '#foto') history.replaceState(null, '', location.pathname + location.search);
+  load();
+
+})();
+</script>
+</body>
+</html>

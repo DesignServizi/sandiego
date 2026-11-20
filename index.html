@@ -409,6 +409,24 @@
     justify-content:center;
   }
 
+  /* le foto come galleria (galleria.html): stesso tasto dell'avvio */
+  #galBtn{
+    padding:16px 40px;
+    font-size:18px;
+    letter-spacing:.05em;
+    border-radius:40px;
+    border:1px solid rgba(255,255,255,.5);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    text-decoration:none;
+    transition:background .25s, transform .25s;
+  }
+
+  #galBtn:hover{
+    background:rgba(255,255,255,.22);
+    transform:scale(1.04);
+  }
+
   /* stesso tasto dell'avvio, un po' piu' piccolo e con il pallino rosso */
   #recBtn{
     padding:14px 26px;
@@ -517,6 +535,9 @@
     <div id="btnRow">
       <button id="startBtn" class="hidden">&#9654; Avvia slideshow</button>
 
+      <!-- le stesse foto in griglia, da sfogliare col dito -->
+      <a id="galBtn" href="galleria.html">&#128444; Galleria</a>
+
       <!-- registra la proiezione cosi' com'e' (transizioni 3D e musica
            comprese) catturando questa scheda del browser, e a fine
            slideshow scarica il filmato -->
@@ -578,6 +599,8 @@
   // Senza codice escono solo le comuni (es. proiezione in sala)
   const USER = (new URLSearchParams(location.search).get('u') || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
   const USER_Q = USER ? 'u=' + encodeURIComponent(USER) : '';
+
+  if(USER_Q) document.getElementById('galBtn').href = 'galleria.html?' + USER_Q;
 
   const LIVE_POLL_MS = 10000;
 
