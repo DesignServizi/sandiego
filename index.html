@@ -2601,21 +2601,42 @@
     if(st.music) delegateTrack = st.music;
 
     if(st.autostart){
+      // prima pagina ancora per AUTO_WAIT secondi col conto alla rovescia,
+      // cosi' chi vuole puo' scegliere la Galleria; "Avvia" parte subito
       recWanted = false;
-      start();
+      startBtn.classList.remove('hidden');
+      let left = AUTO_WAIT;
+      const tick = () => {
+        if(left <= 0){ stopCountdown(); start(); return; }
+        statusText.textContent = 'Lo slideshow parte tra ' + left + '…';
+        left--;
+      };
+      tick();
+      countdownTimer = setInterval(tick, 1000);
     }else{
       startBtn.classList.remove('hidden');
     }
   }
 
+  // avvio automatico: secondi di attesa sulla prima pagina
+  const AUTO_WAIT = 5;
+  let countdownTimer = null;
+
+  function stopCountdown(){
+    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
+    statusText.textContent = '';
+  }
+
   applySettings();
 
   startBtn.addEventListener('click', () => {
+    stopCountdown();
     recWanted = false;
     start();
   });
 
   recBtn.addEventListener('click', async () => {
+    stopCountdown();
     recBtn.disabled = true;
     startBtn.disabled = true;
     statusText.textContent = 'Scegli questa scheda (con l\'audio) nel pannello di Chrome...';
