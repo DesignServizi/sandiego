@@ -896,9 +896,21 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     let t = devRot;
     if((t === 90 || t === 270) && frameLandscape) return 0;
     if((t === 0 || t === 180) && frameLandscape) return 0;   // caso strano: non si tocca
-    // frontale: stesso verso della posteriore (provato su telefono 01/11/2026:
-    // invertirlo la faceva uscire sottosopra)
+    // frontale: guarda dal lato opposto, il fotogramma e' a specchio rispetto
+    // al telefono, quindi la rotazione va nel verso contrario (90 <-> 270).
+    // Il 01/11/2026 era stato messo uguale alla posteriore, ma quella prova era
+    // falsata dal bug dell'anteprima sottosopra (camAfterRotate). Selfie
+    // capovolti visti dall'utente il 21/11/2026
+    if(isFront() && (t === 90 || t === 270)) return 360 - t;
     return t;
+  }
+  // fotocamera frontale attiva (quella vera del flusso, se il browser lo dice)
+  function isFront(){
+    try{
+      const s = camStream && camStream.getVideoTracks()[0].getSettings();
+      if(s && s.facingMode) return s.facingMode === 'user';
+    }catch(e){}
+    return camFacing === 'user';
   }
   let toastTimer = null;
 
