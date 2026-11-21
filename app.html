@@ -890,11 +890,14 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   let orientOk = false;
   window.addEventListener('deviceorientation', e => { if(e.beta != null && e.gamma != null) orientOk = true; });
 
+  let motionOk = false;
+
   function onDevMotion(e){
     if(orientOk) return;
     const a = e.accelerationIncludingGravity;
     if(!a || a.x == null || a.y == null) return;
     devSeen = true;
+    motionOk = true;
     const ux = a.x / 9.81, uy = a.y / 9.81;
     if(Math.hypot(ux, uy) < 0.45) return;
     if(Math.abs(ux) > Math.abs(uy) * 1.2) devRot = ux > 0 ? 90 : 270;
@@ -954,7 +957,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       d.textContent =
         'beta ' + (o && o.beta != null ? Math.round(o.beta) : 'null') +
         ' gamma ' + (o && o.gamma != null ? Math.round(o.gamma) : 'null') +
-        ' devRot ' + devRot + ' seen ' + devSeen + ' gyro ' + orientOk +
+        ' devRot ' + devRot + ' seen ' + devSeen + ' gyro ' + orientOk + ' mot ' + motionOk +
         ' acc ' + (lastMotion ? lastMotion.x.toFixed(1) + ',' + lastMotion.y.toFixed(1) : 'null') + '\n' +
         'frame ' + v.videoWidth + 'x' + v.videoHeight +
         ' screen ' + (screen.orientation ? screen.orientation.type + ' ' + screen.orientation.angle : '-') +
@@ -1030,7 +1033,16 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   async function openCam(keepCount){
     // solo telefoni (touch): sul computer niente schermo intero
-    if(matchMedia('(pointer: coarse)').matches) await lockPortrait();
+    // il blocco serve solo se i sensori dicono come e' tenuto il telefono.
+    // Senza sensori (Chrome con "Sensori di movimento" bloccati: telefono
+    // dell'utente 21/11/2026, beta/gamma e accelerometro null) lo schermo
+    // resta libero di ruotare: il fotogramma arriva gia' orizzontale e la
+    // foto esce dritta (shotTurn = 0)
+    if(matchMedia('(pointer: coarse)').matches){
+      for(let i = 0; i < 10 && !orientOk && !motionOk; i++) await new Promise(r => setTimeout(r, 50));
+      if(orientOk || motionOk) await lockPortrait();
+      else unlockPortrait();
+    }
     stopCam();
 
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
