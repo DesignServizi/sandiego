@@ -515,7 +515,6 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
   <div id="camTimer">0:00</div>
   <div id="camToast"></div>
-  <div id="camDebug" style="display:none;position:absolute;top:calc(60px + env(safe-area-inset-top));left:8px;right:8px;z-index:9;background:rgba(0,0,0,.7);color:#0f0;font:12px/1.4 monospace;padding:6px;border-radius:6px;white-space:pre-wrap;pointer-events:none"></div>
   <div id="camMode">
     <button type="button" data-mode="photo">FOTO</button>
     <button type="button" data-mode="video">VIDEO</button>
@@ -946,34 +945,6 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     // tolta. Frontale e posteriore stesso verso, come nel cantiere
     return t;
   }
-  // diagnosi della rotazione: solo con &debug=1 nel link (prove dell'utente)
-  let lastOrient = null;
-  window.addEventListener('deviceorientation', e => { lastOrient = e; });
-  let lastMotion = null;
-  window.addEventListener('devicemotion', e => {
-    const a = e.accelerationIncludingGravity;
-    if(a && a.x != null && a.y != null) lastMotion = a;
-  });
-  if(/[?&]debug=1/.test(location.search)){
-    setInterval(() => {
-      const d = $('camDebug'), v = $('camVideo');
-      if(!camStream){ d.style.display = 'none'; return; }
-      d.style.display = 'block';
-      const o = lastOrient;
-      let fm = '?';
-      try{ fm = camStream.getVideoTracks()[0].getSettings().facingMode || '-'; }catch(e){}
-      d.textContent =
-        'beta ' + (o && o.beta != null ? Math.round(o.beta) : 'null') +
-        ' gamma ' + (o && o.gamma != null ? Math.round(o.gamma) : 'null') +
-        ' devRot ' + devRot + ' seen ' + devSeen + ' gyro ' + orientOk + ' mot ' + motionOk +
-        ' acc ' + (lastMotion ? lastMotion.x.toFixed(1) + ',' + lastMotion.y.toFixed(1) : 'null') + '\n' +
-        'frame ' + v.videoWidth + 'x' + v.videoHeight +
-        ' screen ' + (screen.orientation ? screen.orientation.type + ' ' + screen.orientation.angle : '-') +
-        ' win ' + innerWidth + 'x' + innerHeight + '\n' +
-        'facing ' + fm + ' front ' + isFront() + ' turn ' + shotTurn(v.videoWidth, v.videoHeight) +
-        ' locked ' + camLocked + ' fs ' + !!document.fullscreenElement;
-    }, 300);
-  }
 
   // fotocamera frontale attiva (quella vera del flusso, se il browser lo dice)
   function isFront(){
@@ -1014,17 +985,10 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       camLocked = true;
       return;
     }catch(e){}
-    try{
-      const el = document.documentElement;
-      if(!document.fullscreenElement && el.requestFullscreen){
-        await el.requestFullscreen({ navigationUI: 'hide' });
-      }
-      await screen.orientation.lock('portrait-primary');
-      camLocked = true;
-    }catch(e){
-      // niente blocco: resta la riapertura dopo la rotazione (camAfterRotate)
-      if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
-    }
+    // niente schermo intero: Chrome mostrerebbe ogni volta "per uscire dallo
+    // schermo intero..." (l'utente non lo vuole, 21/11/2026). Il blocco riesce
+    // solo con l'app installata; nel browser lo schermo ruota e il fotogramma
+    // arriva gia' orizzontale (camAfterRotate riapre la fotocamera)
   }
 
   function unlockPortrait(){
