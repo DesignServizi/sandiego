@@ -927,10 +927,54 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     camStream = null;
   }
 
+  // Android con la rotazione automatica: quando lo schermo gira, Chrome manda
+  // l'anteprima della frontale capovolta e riaprire la fotocamera non basta
+  // (visto dall'utente 21/11/2026). A fotocamera aperta lo schermo si blocca
+  // in verticale, come fanno le app fotocamera: il flusso resta verticale e
+  // lo scatto si raddrizza col giroscopio (shotTurn), come con la rotazione
+  // bloccata. Il blocco vuole lo schermo intero; iPhone non lo permette e
+  // resta com'era
+  let camLocked = false;
+
+  async function lockPortrait(){
+    if(camLocked || !screen.orientation || !screen.orientation.lock) return;
+    try{
+      await screen.orientation.lock('portrait-primary');
+      camLocked = true;
+      return;
+    }catch(e){}
+    try{
+      const el = document.documentElement;
+      if(!document.fullscreenElement && el.requestFullscreen){
+        await el.requestFullscreen({ navigationUI: 'hide' });
+      }
+      await screen.orientation.lock('portrait-primary');
+      camLocked = true;
+    }catch(e){
+      // niente blocco: resta la riapertura dopo la rotazione (camAfterRotate)
+      if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+  }
+
+  function unlockPortrait(){
+    if(!camLocked) return;
+    camLocked = false;
+    try{ screen.orientation.unlock(); }catch(e){}
+    if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+  }
+
+  // uscita dallo schermo intero col tasto indietro: il blocco cade da solo
+  document.addEventListener('fullscreenchange', () => {
+    if(!document.fullscreenElement) camLocked = false;
+  });
+
   async function openCam(keepCount){
+    // solo telefoni (touch): sul computer niente schermo intero
+    if(matchMedia('(pointer: coarse)').matches) await lockPortrait();
     stopCam();
 
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      unlockPortrait();
       return false;   // browser vecchio: si ripiega sul selettore del telefono
     }
 
@@ -949,6 +993,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       // permesso negato o fotocamera occupata: si resta su Carica
       $('upMsg').className = 'msg bad';
       $('upMsg').textContent = 'Fotocamera non disponibile: consenti l’accesso alla fotocamera nelle impostazioni del browser.';
+      unlockPortrait();
       return false;
     }
 
@@ -986,6 +1031,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   function closeCam(){
     stopRec();   // un video in corso si chiude e parte l'invio
     stopCam();
+    unlockPortrait();
     $('cam').classList.add('hidden');
   }
 
