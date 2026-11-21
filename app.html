@@ -271,6 +271,9 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
 #cam{ position:fixed; inset:0; z-index:60; background:#000; }
 #cam.hidden{ display:none; }
 #camVideo{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+/* selfie a specchio come le app fotocamera: non specchiato, col telefono
+   girato e lo schermo fermo appariva sottosopra (21/11/2026) */
+#cam.front #camVideo{ transform:scaleX(-1); }
 #camFlash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
 #camFlash.on{ opacity:.85; transition:none; }
 #camClose, #camFlip{
@@ -1055,6 +1058,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     }
 
     $('camVideo').srcObject = camStream;
+    $('cam').classList.toggle('front', isFront());
     $('cam').classList.remove('hidden');
     showMode();
     if(!keepCount) camShots = 0;
@@ -1145,6 +1149,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     const ctx = c.getContext('2d');
     ctx.translate(c.width / 2, c.height / 2);
     ctx.rotate(-turn * Math.PI / 180);   // telefono girato a sinistra = foto ruotata a sinistra
+    if(isFront()) ctx.scale(-1, 1);      // selfie a specchio, come l'anteprima
     ctx.drawImage(v, -vw / 2, -vh / 2);
 
     $('camFlash').classList.add('on');
@@ -1211,6 +1216,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
     const vw = v.videoWidth, vh = v.videoHeight;
     const turn = shotTurn(vw, vh);
+    const front = isFront();   // ruotato: a specchio come la foto
     let stream = camStream;
 
     if(turn !== 0){
@@ -1226,6 +1232,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.translate(c.width / 2, c.height / 2);
           ctx.rotate(-turn * Math.PI / 180);
+          if(front) ctx.scale(-1, 1);
           ctx.drawImage(v, -sw / 2, -sh / 2, sw, sh);
           recRaf = requestAnimationFrame(draw);
         };
