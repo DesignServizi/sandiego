@@ -927,6 +927,14 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   function shotTurn(vw, vh){
     const frameLandscape = vw > vh;
     let t = devRot;
+    // senza sensori (telefono dell'utente 21/11/2026) l'unico dato e' lo
+    // schermo: se ha ruotato in orizzontale ma la fotocamera manda ancora il
+    // fotogramma verticale, si ruota dell'angolo dello schermo (Android: 90 =
+    // telefono girato a sinistra, come devRot). iPhone ha i sensori
+    if(!orientOk && !motionOk && screen.orientation){
+      const a = screen.orientation.angle;
+      t = (a === 90 || a === 180 || a === 270) ? a : 0;
+    }
     if((t === 90 || t === 270) && frameLandscape) return 0;
     if((t === 0 || t === 180) && frameLandscape) return 0;   // caso strano: non si tocca
     // frontale: guarda dal lato opposto, il fotogramma e' a specchio rispetto
