@@ -928,7 +928,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     // Il 01/11/2026 era stato messo uguale alla posteriore, ma quella prova era
     // falsata dal bug dell'anteprima sottosopra (camAfterRotate). Selfie
     // capovolti visti dall'utente il 21/11/2026
-    if(isFront() && (t === 90 || t === 270)) return 360 - t;
+    // 21/11/2026: invertita per la frontale, i selfie uscivano capovolti;
+    // tolta. Frontale e posteriore stesso verso, come nel cantiere
     return t;
   }
   // diagnosi della rotazione: solo con &debug=1 nel link (prove dell'utente)
