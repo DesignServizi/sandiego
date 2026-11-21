@@ -276,12 +276,15 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
 #cam.front #camVideo{ transform:scaleX(-1); }
 #camFlash{ position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
 #camFlash.on{ opacity:.85; transition:none; }
-#camClose, #camFlip{
+#camClose, #camFlip, #camFs{
   position:absolute; top:calc(16px + env(safe-area-inset-top)); width:48px; height:48px; border-radius:50%;
   border:0; background:rgba(0,0,0,.45); color:#fff; font-size:22px; cursor:pointer;
 }
 #camClose{ left:16px; }
 #camFlip{ right:16px; }
+/* schermo intero si/no (scelta dell'utente, ricordata sul telefono) */
+#camFs{ left:50%; transform:translateX(-50%); font-size:20px; }
+#camFs.on{ background:rgba(232,185,60,.85); color:#111; }
 #camShot{
   position:absolute; left:50%; bottom:calc(32px + env(safe-area-inset-bottom)); transform:translateX(-50%);
   width:78px; height:78px; border-radius:50%; border:5px solid #fff; background:rgba(255,255,255,.35); cursor:pointer;
@@ -320,7 +323,7 @@ details.info summary{ cursor:pointer; color:var(--navy); font-weight:600; }
   font-variant-numeric:tabular-nums; display:none;
 }
 #cam.rec #camTimer{ display:block; }
-#cam.rec #camFlip, #cam.rec #camClose{ opacity:.35; pointer-events:none; }
+#cam.rec #camFlip, #cam.rec #camClose, #cam.rec #camFs{ opacity:.35; pointer-events:none; }
 #cam.video #camToast{ bottom:calc(178px + env(safe-area-inset-bottom)); }
 @media (orientation:landscape) and (max-height:600px){
   #camMode{ bottom:calc(16px + env(safe-area-inset-bottom)); }
@@ -513,6 +516,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   <div id="camFlash"></div>
   <button type="button" id="camClose" aria-label="Chiudi">✕</button>
   <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
+  <button type="button" id="camFs" aria-label="Schermo intero">⛶</button>
   <div id="camTimer">0:00</div>
   <div id="camToast"></div>
   <div id="camMode">
@@ -978,25 +982,68 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   // resta com'era
   let camLocked = false;
 
+  // Schermo intero: a scelta col tasto in alto al centro (21/11/2026).
+  // Spento: niente avviso di Chrome "per uscire dallo schermo intero..."
+  // (copre il tasto di scatto col telefono girato), lo schermo e' bloccato
+  // in verticale solo con l'app installata. Acceso: schermo intero e blocco
+  // in verticale anche nel browser
+  let camFull = false;
+  try{ camFull = localStorage.getItem('sd-fs') === '1'; }catch(e){}
+
   async function lockPortrait(){
-    if(camLocked || !screen.orientation || !screen.orientation.lock) return;
+    if(!screen.orientation || !screen.orientation.lock) return;
+    if(!camLocked){
+      try{
+        await screen.orientation.lock('portrait-primary');
+        camLocked = true;
+        return;
+      }catch(e){}
+    }
+    if(!camFull) return;
     try{
+      const el = document.documentElement;
+      if(!document.fullscreenElement && el.requestFullscreen){
+        await el.requestFullscreen({ navigationUI: 'hide' });
+      }
       await screen.orientation.lock('portrait-primary');
       camLocked = true;
-      return;
     }catch(e){}
-    // niente schermo intero: Chrome mostrerebbe ogni volta "per uscire dallo
-    // schermo intero..." (l'utente non lo vuole, 21/11/2026). Il blocco riesce
-    // solo con l'app installata; nel browser lo schermo ruota e il fotogramma
-    // arriva gia' orizzontale (camAfterRotate riapre la fotocamera)
+  }
+
+  function exitFull(){
+    if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
   }
 
   function unlockPortrait(){
-    if(!camLocked) return;
-    camLocked = false;
-    try{ screen.orientation.unlock(); }catch(e){}
-    if(document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    if(camLocked){
+      camLocked = false;
+      try{ screen.orientation.unlock(); }catch(e){}
+    }
+    exitFull();
   }
+
+  function showFull(){
+    // iPhone: niente schermo intero per le pagine, il tasto non compare
+    if(!document.documentElement.requestFullscreen){ $('camFs').style.display = 'none'; return; }
+    $('camFs').classList.toggle('on', camFull);
+    $('camFs').setAttribute('aria-pressed', camFull ? 'true' : 'false');
+  }
+
+  // si accende/spegne dentro il tocco (il browser lo vuole)
+  $('camFs').addEventListener('click', async () => {
+    camFull = !camFull;
+    try{ localStorage.setItem('sd-fs', camFull ? '1' : '0'); }catch(e){}
+    showFull();
+    if(camFull){
+      await lockPortrait();
+    }else{
+      const wasLocked = camLocked;
+      unlockPortrait();
+      // con l'app installata il blocco riesce anche senza schermo intero
+      if(wasLocked && (orientOk || motionOk)) lockPortrait();
+    }
+  });
+  showFull();
 
   // uscita dallo schermo intero col tasto indietro: il blocco cade da solo
   document.addEventListener('fullscreenchange', () => {
@@ -1013,7 +1060,13 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     if(matchMedia('(pointer: coarse)').matches){
       for(let i = 0; i < 10 && !orientOk && !motionOk; i++) await new Promise(r => setTimeout(r, 50));
       if(orientOk || motionOk) await lockPortrait();
-      else unlockPortrait();
+      else{
+        unlockPortrait();
+        // senza sensori niente blocco, ma lo schermo intero se scelto
+        if(camFull && !document.fullscreenElement && document.documentElement.requestFullscreen){
+          try{ await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); }catch(e){}
+        }
+      }
     }
     stopCam();
 
