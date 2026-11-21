@@ -878,6 +878,32 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
 
   window.addEventListener('deviceorientation', onDevOrient);
 
+  // Ripiego: alcuni Android non danno beta/gamma (arrivano null, visto
+  // dall'utente 21/11/2026: senza giroscopio o sensore bloccato) e la foto
+  // restava coricata. L'accelerometro c'e' su tutti: a telefono fermo
+  // accelerationIncludingGravity punta verso l'alto (x a destra, y verso
+  // l'alto dello schermo), cioe' la stessa direzione "su" di onDevOrient.
+  // Si usa solo se il giroscopio non ha mai dato valori
+  let orientOk = false;
+  window.addEventListener('deviceorientation', e => { if(e.beta != null && e.gamma != null) orientOk = true; });
+
+  function onDevMotion(e){
+    if(orientOk) return;
+    const a = e.accelerationIncludingGravity;
+    if(!a || a.x == null || a.y == null) return;
+    devSeen = true;
+    const ux = a.x / 9.81, uy = a.y / 9.81;
+    if(Math.hypot(ux, uy) < 0.45) return;
+    if(Math.abs(ux) > Math.abs(uy) * 1.2) devRot = ux > 0 ? 90 : 270;
+    else if(Math.abs(uy) > Math.abs(ux) * 1.2) devRot = uy > 0 ? 0 : 180;
+  }
+
+  // iPhone ha sempre il giroscopio (e il segno dell'accelerometro e' al
+  // contrario): il ripiego vale solo per gli altri
+  if(!/iPhone|iPad|iPod/.test(navigator.userAgent)){
+    window.addEventListener('devicemotion', onDevMotion);
+  }
+
   // iPhone: il giroscopio va chiesto dentro un tocco. Si chiede al primo tocco
   // qualsiasi sulla pagina, cosi' quando si scatta e' gia' attivo
   if(window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function'){
@@ -908,6 +934,11 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   // diagnosi della rotazione: solo con &debug=1 nel link (prove dell'utente)
   let lastOrient = null;
   window.addEventListener('deviceorientation', e => { lastOrient = e; });
+  let lastMotion = null;
+  window.addEventListener('devicemotion', e => {
+    const a = e.accelerationIncludingGravity;
+    if(a && a.x != null && a.y != null) lastMotion = a;
+  });
   if(/[?&]debug=1/.test(location.search)){
     setInterval(() => {
       const d = $('camDebug'), v = $('camVideo');
@@ -919,7 +950,8 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
       d.textContent =
         'beta ' + (o && o.beta != null ? Math.round(o.beta) : 'null') +
         ' gamma ' + (o && o.gamma != null ? Math.round(o.gamma) : 'null') +
-        ' devRot ' + devRot + ' seen ' + devSeen + '\n' +
+        ' devRot ' + devRot + ' seen ' + devSeen + ' gyro ' + orientOk +
+        ' acc ' + (lastMotion ? lastMotion.x.toFixed(1) + ',' + lastMotion.y.toFixed(1) : 'null') + '\n' +
         'frame ' + v.videoWidth + 'x' + v.videoHeight +
         ' screen ' + (screen.orientation ? screen.orientation.type + ' ' + screen.orientation.angle : '-') +
         ' win ' + innerWidth + 'x' + innerHeight + '\n' +
