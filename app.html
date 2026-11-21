@@ -512,6 +512,7 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
   <button type="button" id="camFlip" aria-label="Cambia fotocamera">🔄</button>
   <div id="camTimer">0:00</div>
   <div id="camToast"></div>
+  <div id="camDebug" style="display:none;position:absolute;top:calc(60px + env(safe-area-inset-top));left:8px;right:8px;z-index:9;background:rgba(0,0,0,.7);color:#0f0;font:12px/1.4 monospace;padding:6px;border-radius:6px;white-space:pre-wrap;pointer-events:none"></div>
   <div id="camMode">
     <button type="button" data-mode="photo">FOTO</button>
     <button type="button" data-mode="video">VIDEO</button>
@@ -904,6 +905,29 @@ nav button[aria-selected="true"] .ic{ transform:scale(1.12); }
     if(isFront() && (t === 90 || t === 270)) return 360 - t;
     return t;
   }
+  // diagnosi della rotazione: solo con &debug=1 nel link (prove dell'utente)
+  let lastOrient = null;
+  window.addEventListener('deviceorientation', e => { lastOrient = e; });
+  if(/[?&]debug=1/.test(location.search)){
+    setInterval(() => {
+      const d = $('camDebug'), v = $('camVideo');
+      if(!camStream){ d.style.display = 'none'; return; }
+      d.style.display = 'block';
+      const o = lastOrient;
+      let fm = '?';
+      try{ fm = camStream.getVideoTracks()[0].getSettings().facingMode || '-'; }catch(e){}
+      d.textContent =
+        'beta ' + (o && o.beta != null ? Math.round(o.beta) : 'null') +
+        ' gamma ' + (o && o.gamma != null ? Math.round(o.gamma) : 'null') +
+        ' devRot ' + devRot + ' seen ' + devSeen + '\n' +
+        'frame ' + v.videoWidth + 'x' + v.videoHeight +
+        ' screen ' + (screen.orientation ? screen.orientation.type + ' ' + screen.orientation.angle : '-') +
+        ' win ' + innerWidth + 'x' + innerHeight + '\n' +
+        'facing ' + fm + ' front ' + isFront() + ' turn ' + shotTurn(v.videoWidth, v.videoHeight) +
+        ' locked ' + camLocked + ' fs ' + !!document.fullscreenElement;
+    }, 300);
+  }
+
   // fotocamera frontale attiva (quella vera del flusso, se il browser lo dice)
   function isFront(){
     try{
